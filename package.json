@@ -1,0 +1,16 @@
+{
+  "name": "map-animation",
+  "version": "1.0.0",
+  "description": "Indiana Jones style map animation with Puppeteer",
+  "main": "animate.js",
+  "type": "module",
+  "scripts": {
+    "animate": "node animate.js"
+  },
+  "keywords": ["puppeteer", "map", "animation"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "puppeteer": "^21.11.0"
+  }
+}

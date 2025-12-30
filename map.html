@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Map Animation</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Courier New', monospace;
+        }
+        #map {
+            width: 1920px;
+            height: 1080px;
+        }
+        /* Base styling - can be customized for Indiana Jones look */
+        .leaflet-container {
+            background: #f4e8d0;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <script>
+        // Initialize map
+        let map;
+        let animatedLine;
+        let startMarker, endMarker;
+        
+        function initMap(coordinates, options = {}) {
+            const {
+                zoom = 4,
+                lineColor = '#8B4513',
+                lineWidth = 3,
+                animationDuration = 5000
+            } = options;
+            
+            // Calculate center point
+            const centerLat = (coordinates[0][0] + coordinates[coordinates.length - 1][0]) / 2;
+            const centerLng = (coordinates[0][1] + coordinates[coordinates.length - 1][1]) / 2;
+            
+            // Create map
+            map = L.map('map', {
+                zoomControl: false,
+                attributionControl: false
+            }).setView([centerLat, centerLng], zoom);
+            
+            // Add tile layer (basic OpenStreetMap - can be styled)
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19
+            }).addTo(map);
+            
+            // Fit bounds to show entire route
+            const bounds = L.latLngBounds(coordinates.map(c => [c[0], c[1]]));
+            map.fitBounds(bounds, { padding: [100, 100] });
+            
+            // Store for animation
+            window.mapData = {
+                coordinates,
+                lineColor,
+                lineWidth,
+                animationDuration
+            };
+        }
+        
+        function animateRoute() {
+            return new Promise((resolve) => {
+                const { coordinates, lineColor, lineWidth, animationDuration } = window.mapData;
+                
+                // Add start marker
+                startMarker = L.circleMarker(coordinates[0], {
+                    radius: 8,
+                    fillColor: '#FF0000',
+                    color: '#8B0000',
+                    weight: 2,
+                    fillOpacity: 1
+                }).addTo(map);
+                
+                // Add end marker
+                endMarker = L.circleMarker(coordinates[coordinates.length - 1], {
+                    radius: 8,
+                    fillColor: '#00FF00',
+                    color: '#006400',
+                    weight: 2,
+                    fillOpacity: 0
+                }).addTo(map);
+                
+                // Animate the line
+                const startTime = Date.now();
+                const totalSteps = 100;
+                let currentStep = 0;
+                
+                function drawFrame() {
+                    currentStep++;
+                    const progress = currentStep / totalSteps;
+                    
+                    // Interpolate along the route
+                    const currentIndex = Math.min(
+                        Math.floor(progress * (coordinates.length - 1)),
+                        coordinates.length - 1
+                    );
+                    
+                    const visibleCoords = coordinates.slice(0, currentIndex + 1);
+                    
+                    // Remove old line
+                    if (animatedLine) {
+                        map.removeLayer(animatedLine);
+                    }
+                    
+                    // Draw new line
+                    if (visibleCoords.length > 1) {
+                        animatedLine = L.polyline(visibleCoords, {
+                            color: lineColor,
+                            weight: lineWidth,
+                            opacity: 0.8
+                        }).addTo(map);
+                    }
+                    
+                    // Show end marker when complete
+                    if (progress >= 0.95) {
+                        endMarker.setStyle({ fillOpacity: 1 });
+                    }
+                    
+                    if (currentStep < totalSteps) {
+                        setTimeout(drawFrame, animationDuration / totalSteps);
+                    } else {
+                        resolve();
+                    }
+                }
+                
+                drawFrame();
+            });
+        }
+        
+        // Make functions available globally
+        window.initMap = initMap;
+        window.animateRoute = animateRoute;
+    </script>
+</body>
+</html>
