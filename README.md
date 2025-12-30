@@ -16,6 +16,22 @@ npm run animate
 
 This will create a `map-animation.webm` video file.
 
+### Optional: StadiaMaps API Key
+
+For production use or to avoid rate limits, sign up for a free API key at [stadiamaps.com](https://stadiamaps.com):
+
+1. Create a free account (no credit card required)
+2. Generate an API key
+3. Create a `.env` file:
+```bash
+STADIAMAPS_API_KEY=your-api-key-here
+```
+
+Or add it directly to [animate.js](animate.js#L45):
+```javascript
+apiKey: 'your-api-key-here'
+```
+
 ## Customization
 
 Edit `animate.js` to change:

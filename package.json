@@ -7,10 +7,14 @@
   "scripts": {
     "animate": "node animate.js"
   },
-  "keywords": ["puppeteer", "map", "animation"],
+  "keywords": [
+    "puppeteer",
+    "map",
+    "animation"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "puppeteer": "^21.11.0"
+    "puppeteer": "^24.34.0"
   }
 }
