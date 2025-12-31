@@ -88,7 +88,22 @@ let previousLabel = destinationsConfig.start.label;
 console.log(`Building route with ${destinationsConfig.stops.length} stops...`);
 for (let i = 0; i < destinationsConfig.stops.length; i++) {
     const stop = destinationsConfig.stops[i];
-    const nextPoint = stop.coordinates;
+    
+    // Support both coordinates and address for stops
+    let nextPoint;
+    if (stop.coordinates) {
+        nextPoint = stop.coordinates;
+    } else if (stop.address) {
+        console.log(`Geocoding stop: ${stop.address}...`);
+        nextPoint = await geocodeAddress(stop.address);
+        if (!nextPoint) {
+            console.error(`Could not geocode stop address: ${stop.address}`);
+            process.exit(1);
+        }
+    } else {
+        console.error(`Stop ${i + 1} has neither coordinates nor address`);
+        process.exit(1);
+    }
     
     let coords;
     if (stop.travelMode === 'direct') {
@@ -115,6 +130,24 @@ for (let i = 0; i < destinationsConfig.stops.length; i++) {
         }
         coords = await getRouteCoordinates(currentPoint, nextPoint, stop.travelMode, viaPoints);
     }
+    
+    // Validate coords
+    if (!coords || coords.length === 0) {
+        console.error(`ERROR: No coordinates returned for segment ${i + 1}`);
+        console.error('Creating fallback direct route...');
+        // Create fallback direct line
+        const numPoints = 50;
+        coords = [];
+        for (let j = 0; j <= numPoints; j++) {
+            const t = j / numPoints;
+            coords.push([
+                currentPoint[0] + (nextPoint[0] - currentPoint[0]) * t,
+                currentPoint[1] + (nextPoint[1] - currentPoint[1]) * t
+            ]);
+        }
+    }
+    
+    console.log(`Segment ${i + 1}: ${coords.length} coordinates`);
     
     routeSegments.push({
         coordinates: coords,
@@ -173,20 +206,27 @@ const options = {
 async function createMapAnimation() {
     console.log('Launching browser...');
     const browser = await puppeteer.launch({
-        headless: false, // Show browser for better frame capture
+        headless: false,
+        devtools: true, // Open devtools to see console
         defaultViewport: {
-            width: 1920,
-            height: 1080,
-            deviceScaleFactor: 1
+            width: 1280,
+            height: 720,
+            deviceScaleFactor: 2  // Higher quality rendering (2x resolution)
         },
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
-            '--disable-web-security'
+            '--disable-web-security',
+            '--disable-gpu-vsync',
+            '--disable-frame-rate-limit'
         ]
     });
     
     const page = await browser.newPage();
+    
+    // Listen to console logs from the browser
+    page.on('console', msg => console.log('PAGE:', msg.text()));
+    page.on('pageerror', error => console.error('PAGE ERROR:', error.message));
     
     // Load the map HTML
     const htmlPath = 'file://' + join(__dirname, 'map.html');
@@ -243,44 +283,45 @@ async function createMapAnimation() {
     // Start high-quality video recording using Puppeteer screencast
     console.log('Starting animation and recording...');
     
-    // Use Puppeteer's built-in screencast for recording
+    // Use CDP for higher quality screencast
+    const client = await page.createCDPSession();
+    
+    // Enable page casting with higher quality settings
     const recorder = await page.screencast({ 
         path: 'raw-recording.webm',
-        speed: 1
+        speed: 1,
+        format: 'webm',
+        scale: 1  // Keep full resolution
     });
     
     // Wait for animation function to be ready
     await page.waitForFunction(() => typeof window.animateRoute === 'function', { timeout: 5000 });
     
-    // Animate the route with error handling
-    try {
-        await page.evaluate(async () => {
-            if (typeof window.animateRoute === 'function') {
-                await window.animateRoute();
-            } else {
-                throw new Error('animateRoute function not found');
-            }
-        });
-    } catch (error) {
-        console.error('Animation error:', error);
-        // Continue to try to save what we have
-    }
+    // Calculate total wait time (animation duration + buffer)
+    const animationDuration = options.animationDuration || 30000;
+    const totalWaitTime = animationDuration + 7000; // Animation + title cards + buffer
     
-    // Wait a moment at the end
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    console.log(`Running animation (${animationDuration / 1000}s + 7s for titles)...`);
+    
+    // Start animation
+    page.evaluate(() => window.animateRoute());
+    
+    // Wait for the animation to complete
+    await new Promise(resolve => setTimeout(resolve, totalWaitTime));
+    console.log('Animation finished!');
     
     // Stop recording
     await recorder.stop();
     
     console.log('Recording saved. Converting to MP4...');
     
-    // Use ffmpeg to create MP4 (fast encoding without interpolation)
+    // Use ffmpeg to create MP4 with better quality
     const { execSync } = await import('child_process');
     
     try {
-        // Fast encoding to MP4
-        console.log('Encoding MP4...');
-        execSync(`ffmpeg -y -i raw-recording.webm -c:v libx264 -pix_fmt yuv420p -preset fast -crf 18 -movflags +faststart map-animation.mp4`, {
+        // High quality encoding with proper frame rate
+        console.log('Encoding high-quality MP4...');
+        execSync(`ffmpeg -y -i raw-recording.webm -vf "scale=1280:720:flags=lanczos,fps=30" -c:v libx264 -pix_fmt yuv420p -preset slow -crf 16 -movflags +faststart map-animation.mp4`, {
             stdio: 'inherit',
             cwd: __dirname
         });
@@ -293,6 +334,7 @@ async function createMapAnimation() {
         } catch (e) {}
         
         console.log('\nFor smoother 60fps version, run: npm run smooth');
+        console.log('For old film effect, run: npm run oldfilm');
         
     } catch (ffmpegError) {
         console.error('FFmpeg error:', ffmpegError.message);
