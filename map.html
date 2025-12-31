@@ -252,6 +252,8 @@
         let map;
         let animatedLine;
         let startMarker, endMarker;
+        let allMarkers = []; // Track all markers for cleanup
+        let allLines = [];   // Track all lines for cleanup
         
         function initMap(routeSegments, options = {}) {
             const {
@@ -264,6 +266,27 @@
                 title = 'ADVENTURE',
                 date = ''
             } = options;
+            
+            // Clean up existing map if present (for re-initialization)
+            if (map) {
+                // Remove all markers
+                allMarkers.forEach(m => m.remove());
+                allMarkers = [];
+                
+                // Remove all lines
+                allLines.forEach(l => l.remove());
+                allLines = [];
+                
+                // Remove the map itself
+                map.remove();
+                map = null;
+            }
+            
+            // Reset UI elements
+            const titleCard = document.getElementById('title-card');
+            const destinationCard = document.getElementById('destination-card');
+            if (titleCard) titleCard.style.opacity = '0';
+            if (destinationCard) destinationCard.style.opacity = '0';
             
             // Flatten all coordinates for bounds calculation
             const allCoordinates = routeSegments.flatMap(seg => seg.coordinates);

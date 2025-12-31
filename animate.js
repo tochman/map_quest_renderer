@@ -280,11 +280,37 @@ async function createMapAnimation() {
         });
     });
     
-    // Start high-quality video recording using Puppeteer screencast
-    console.log('Starting animation and recording...');
+    // Wait for animation function to be ready
+    await page.waitForFunction(() => typeof window.animateRoute === 'function', { timeout: 5000 });
     
-    // Use CDP for higher quality screencast
-    const client = await page.createCDPSession();
+    // Calculate total wait time (animation duration + buffer)
+    const animationDuration = options.animationDuration || 30000;
+    const totalWaitTime = animationDuration + 7000; // Animation + title cards + buffer
+    
+    // ===== WARM-UP PASS: Run animation first to cache everything =====
+    console.log('\n🔥 WARM-UP PASS: Running animation to cache tiles and resources...');
+    console.log('(This pass is NOT recorded - just warming up the cache)\n');
+    
+    // Run the animation once without recording
+    await page.evaluate(() => window.animateRoute());
+    
+    // Wait for the warm-up animation to complete
+    await new Promise(resolve => setTimeout(resolve, totalWaitTime));
+    console.log('✓ Warm-up pass complete! All tiles and resources should be cached.\n');
+    
+    // Reset the map for the second pass
+    console.log('Resetting map for recording pass...');
+    await page.evaluate((segments, opts) => {
+        // Reset the animation state
+        window.initMap(segments, opts);
+    }, routeSegments, options);
+    
+    // Give the map a moment to reset
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // ===== RECORDING PASS: Now record the smooth, cached animation =====
+    console.log('🎬 RECORDING PASS: Starting animation with recording...');
+    console.log('(Everything is cached now - should be much smoother!)\n');
     
     // Enable page casting with higher quality settings
     const recorder = await page.screencast({ 
@@ -294,16 +320,12 @@ async function createMapAnimation() {
         scale: 1  // Keep full resolution
     });
     
-    // Wait for animation function to be ready
-    await page.waitForFunction(() => typeof window.animateRoute === 'function', { timeout: 5000 });
-    
-    // Calculate total wait time (animation duration + buffer)
-    const animationDuration = options.animationDuration || 30000;
-    const totalWaitTime = animationDuration + 7000; // Animation + title cards + buffer
+    // Small delay to ensure recorder is ready
+    await new Promise(resolve => setTimeout(resolve, 500));
     
     console.log(`Running animation (${animationDuration / 1000}s + 7s for titles)...`);
     
-    // Start animation
+    // Start the recorded animation
     page.evaluate(() => window.animateRoute());
     
     // Wait for the animation to complete
