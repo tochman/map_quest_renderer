@@ -1,0 +1,28 @@
+{
+  "title": "Road Trip to Campino",
+  "date": "June 2024",
+  "start": {
+    "address": "Stannum, Gråbo, Sweden",
+    "label": "Stannum"
+  },
+  "stops": [
+    {
+      "address": "Gulf Gråbo, Lerlyckegatan, Gråbo, Sweden",
+      "label": "Gulf Gråbo",
+      "travelMode": "driving",
+      "icon": "car"
+    },
+    {
+      "address": "Campino Pizzeria, Gråbo, Sweden",
+      "label": "Campino Pizzeria",
+      "travelMode": "direct",
+      "icon": "backpacker"
+    }
+  ],
+  "animation": {
+    "lineColor": "#8B4513",
+    "lineWidth": 4,
+    "duration": 20000,
+    "useSmoothing": true
+  }
+}

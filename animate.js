@@ -1,13 +1,18 @@
 import puppeteer from 'puppeteer';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { dirname, join, basename } from 'path';
 import { readFile } from 'fs/promises';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Load destinations from JSON
-const destinationsPath = join(__dirname, 'destinations.json');
+// Load destinations from JSON (support custom file via CLI argument)
+const jsonArg = process.argv[2];
+const destinationsPath = jsonArg 
+    ? (jsonArg.startsWith('/') ? jsonArg : join(__dirname, jsonArg))
+    : join(__dirname, 'destinations.json');
+
+console.log(`Loading destinations from: ${basename(destinationsPath)}`);
 const destinationsConfig = JSON.parse(await readFile(destinationsPath, 'utf-8'));
 
 // Function to geocode an address
@@ -168,11 +173,17 @@ const options = {
 async function createMapAnimation() {
     console.log('Launching browser...');
     const browser = await puppeteer.launch({
-        headless: false, // Set to true for production
+        headless: false, // Show browser for better frame capture
         defaultViewport: {
             width: 1920,
-            height: 1080
-        }
+            height: 1080,
+            deviceScaleFactor: 1
+        },
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-web-security'
+        ]
     });
     
     const page = await browser.newPage();
@@ -229,13 +240,13 @@ async function createMapAnimation() {
         });
     });
     
-    // Start video recording with high frame rate
+    // Start high-quality video recording using Puppeteer screencast
     console.log('Starting animation and recording...');
+    
+    // Use Puppeteer's built-in screencast for recording
     const recorder = await page.screencast({ 
-        path: 'map-animation.webm',
-        speed: 1,
-        scale: 1,
-        crop: { x: 0, y: 0, width: 1920, height: 1080 }
+        path: 'raw-recording.webm',
+        speed: 1
     });
     
     // Wait for animation function to be ready
@@ -261,7 +272,34 @@ async function createMapAnimation() {
     // Stop recording
     await recorder.stop();
     
-    console.log('Animation complete! Video saved as map-animation.webm');
+    console.log('Recording saved. Converting to MP4...');
+    
+    // Use ffmpeg to create MP4 (fast encoding without interpolation)
+    const { execSync } = await import('child_process');
+    
+    try {
+        // Fast encoding to MP4
+        console.log('Encoding MP4...');
+        execSync(`ffmpeg -y -i raw-recording.webm -c:v libx264 -pix_fmt yuv420p -preset fast -crf 18 -movflags +faststart map-animation.mp4`, {
+            stdio: 'inherit',
+            cwd: __dirname
+        });
+        console.log('MP4 saved as map-animation.mp4');
+        
+        // Clean up raw recording
+        const { unlinkSync } = await import('fs');
+        try {
+            unlinkSync(join(__dirname, 'raw-recording.webm'));
+        } catch (e) {}
+        
+        console.log('\nFor smoother 60fps version, run: npm run smooth');
+        
+    } catch (ffmpegError) {
+        console.error('FFmpeg error:', ffmpegError.message);
+        console.log('Raw recording kept as raw-recording.webm');
+    }
+    
+    console.log('Animation complete!');
     
     await browser.close();
 }

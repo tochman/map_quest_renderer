@@ -11,10 +11,24 @@ npm install
 ## Usage
 
 ```bash
+# Run with default destinations.json
 npm run animate
+
+# Run with custom JSON file
+npm run animate -- gulf-campino.json
 ```
 
-This will create a `map-animation.webm` video file.
+This will create a `map-animation.mp4` video file.
+
+### Smooth 60fps Version (Optional)
+
+For a smoother video with motion interpolation (slow, CPU intensive):
+
+```bash
+npm run smooth
+```
+
+This creates `map-animation-smooth.mp4` with 60fps interpolation.
 
 ## Configuration
 
@@ -67,7 +81,7 @@ All route and animation settings are configured in `destinations.json`:
 | `stops[].coordinates` | `[latitude, longitude]` of each waypoint |
 | `stops[].label` | Label for the waypoint |
 | `stops[].travelMode` | `"driving"` (uses OSRM routing) or `"direct"` (straight line) |
-| `stops[].icon` | `"bike"` or `"person"` - icon shown during this segment |
+| `stops[].icon` | `"bike"`, `"person"`, `"car"`, or `"backpacker"` - icon shown during this segment |
 | `stops[].viaPoints` | Optional `[[lat, lng], ...]` to force route through specific points |
 | `animation.lineColor` | Route line color (hex) |
 | `animation.lineWidth` | Route line thickness in pixels |
@@ -80,8 +94,10 @@ All route and animation settings are configured in `destinations.json`:
 ### Icons
 
 Place your icon images in the project root:
-- `bike.png` - Motorcycle/bike icon (rotates to follow route direction)
+- `bike.png` - Motorcycle/bike icon (rotates to follow route direction, faces left)
 - `person.png` - Walking person icon (stays upright)
+- `car.png` - Car icon (rotates to follow route direction, faces right)
+- `backpacker.png` - Backpacker icon (rotates to follow route direction, faces left)
 
 ## Features
 
@@ -103,16 +119,6 @@ Place your icon images in the project root:
 5. Route animates with icon following the path
 6. Waypoint labels fade in as you approach
 7. Final destination marker and label appear
-
-## Converting to MP4
-
-If you need MP4 format (Mac-compatible):
-
-```bash
-ffmpeg -i map-animation.webm -c:v libx264 -pix_fmt yuv420p -preset slow -crf 22 -movflags +faststart map-animation.mp4
-```
-
-The `-pix_fmt yuv420p` ensures compatibility with QuickTime and other Mac apps, and `-movflags +faststart` enables streaming playback.
 
 ## Dependencies
 

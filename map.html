@@ -158,6 +158,38 @@
             opacity: 0;
             transition: opacity 0.5s ease;
         }
+        
+        /* Car icon - faces right (opposite direction to bike) */
+        #car {
+            width: 60px;
+            height: 60px;
+            position: absolute;
+            z-index: 999;
+            filter: drop-shadow(4px 4px 6px rgba(0,0,0,0.7));
+            pointer-events: none;
+            background-image: url('car.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+        
+        /* Backpacker icon - faces left (same direction as bike) */
+        #backpacker {
+            width: 50px;
+            height: 50px;
+            position: absolute;
+            z-index: 999;
+            filter: drop-shadow(4px 4px 6px rgba(0,0,0,0.7));
+            pointer-events: none;
+            background-image: url('backpacker.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Special+Elite&display=swap" rel="stylesheet">
 </head>
@@ -209,6 +241,8 @@
     <div id="date-stamp"></div>
     <div id="motorcycle" style="display:none;"></div>
     <div id="person" style="display:none;"></div>
+    <div id="car" style="display:none;"></div>
+    <div id="backpacker" style="display:none;"></div>
     
     <script>
         // Initialize map
@@ -347,8 +381,12 @@
             // Show icons (initially hidden)
             const motorcycle = document.getElementById('motorcycle');
             const person = document.getElementById('person');
+            const car = document.getElementById('car');
+            const backpacker = document.getElementById('backpacker');
             motorcycle.style.display = 'block';
             person.style.display = 'block';
+            car.style.display = 'block';
+            backpacker.style.display = 'block';
             motorcycle.style.opacity = '1'; // Show motorcycle initially
             
             // STAGE 3: Animate route WITH simultaneous zoom
@@ -459,14 +497,26 @@
                     const currentIconType = routeSegments[currentSegment].icon;
                     let currentIcon;
                     
+                    // Hide all icons first
+                    motorcycle.style.opacity = '0';
+                    person.style.opacity = '0';
+                    car.style.opacity = '0';
+                    backpacker.style.opacity = '0';
+                    
+                    // Show current icon
                     if (currentIconType === 'bike') {
                         currentIcon = motorcycle;
                         motorcycle.style.opacity = '1';
-                        person.style.opacity = '0';
+                    } else if (currentIconType === 'car') {
+                        currentIcon = car;
+                        car.style.opacity = '1';
+                    } else if (currentIconType === 'backpacker') {
+                        currentIcon = backpacker;
+                        backpacker.style.opacity = '1';
                     } else {
+                        // Default to person
                         currentIcon = person;
                         person.style.opacity = '1';
-                        motorcycle.style.opacity = '0';
                     }
                     
                     const coordinates = routeSegments[currentSegment].coordinates;
@@ -557,15 +607,22 @@
                         const point = map.latLngToContainerPoint(currentPos);
                         
                         // Center the icon on the point (adjust for icon size)
-                        const iconSize = currentIconType === 'bike' ? 60 : 40;
+                        let iconSize;
+                        if (currentIconType === 'bike' || currentIconType === 'car') {
+                            iconSize = 60;
+                        } else if (currentIconType === 'backpacker') {
+                            iconSize = 50;
+                        } else {
+                            iconSize = 40; // person
+                        }
                         const iconOffset = iconSize / 2;
                         currentIcon.style.left = (point.x - iconOffset) + 'px';
                         currentIcon.style.top = (point.y - iconOffset) + 'px';
                         
-                        // Only rotate bike icon, person stays upright
-                        if (currentIconType === 'bike') {
-                            // Look ahead to get direction of travel (look further for smoother rotation)
-                            const lookAhead = Math.min(coordinates.length - 1, currentIndex + 15);
+                        // Rotate icons based on direction (except person which stays upright)
+                        if (currentIconType === 'bike' || currentIconType === 'car' || currentIconType === 'backpacker') {
+                            // Look far ahead for stable direction (50+ waypoints ahead)
+                            const lookAhead = Math.min(coordinates.length - 1, currentIndex + 50);
                             const fromPos = coordinates[currentIndex];
                             const toPos = coordinates[lookAhead];
                             
@@ -577,24 +634,27 @@
                             const dx = toPoint.x - fromPoint.x;
                             const dy = toPoint.y - fromPoint.y;
                             
-                            // Only update if there's meaningful movement
-                            if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
-                                // atan2 gives angle from positive X axis (pointing right/east)
-                                // The bike.png faces LEFT, so we add 180° to flip it
-                                let angle = Math.atan2(dy, dx) * 180 / Math.PI + 180;
+                            // Only update if there's significant movement (higher threshold)
+                            if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+                                // Calculate target angle
+                                // bike and backpacker face LEFT (add 180°), car faces RIGHT (no offset)
+                                const angleOffset = (currentIconType === 'bike' || currentIconType === 'backpacker') ? 180 : 0;
+                                let targetAngle = Math.atan2(dy, dx) * 180 / Math.PI + angleOffset;
                                 
-                                // Normalize angle to -180 to 180 range
-                                while (angle > 180) angle -= 360;
-                                while (angle < -180) angle += 360;
+                                // Normalize to -180 to 180
+                                while (targetAngle > 180) targetAngle -= 360;
+                                while (targetAngle < -180) targetAngle += 360;
                                 
-                                // Smooth the rotation to avoid jitter (lower = smoother but slower response)
-                                let angleDiff = angle - lastAngle;
-                                // Handle wrap-around
+                                // Only apply if angle change is significant (> 5 degrees)
+                                let angleDiff = targetAngle - lastAngle;
                                 while (angleDiff > 180) angleDiff -= 360;
                                 while (angleDiff < -180) angleDiff += 360;
-                                lastAngle = lastAngle + angleDiff * 0.12;
                                 
-                                // Apply rotation - bike always points in direction of travel
+                                if (Math.abs(angleDiff) > 5) {
+                                    // Very slow interpolation for smooth cinematic feel
+                                    lastAngle = lastAngle + angleDiff * 0.05;
+                                }
+                                
                                 currentIcon.style.transform = `rotate(${lastAngle}deg)`;
                                 currentIcon.style.transformOrigin = `${iconOffset}px ${iconOffset}px`;
                             }
