@@ -1,0 +1,42 @@
+{
+  "title": "Solo trip Vättlefjäll",
+  "date": "December 31, 2025",
+  "start": {
+    "address": "Stannums Byväg 20, Lerum, Sweden",
+    "label": "START: STANNUM"
+  },
+  "stops": [
+    {
+      "coordinates": [
+        57.81356,
+        12.1706
+      ],
+      "label": "BERGUMS KYRKA",
+      "travelMode": "driving",
+      "icon": "bike"
+    },
+    {
+      "coordinates": [
+        57.845,
+        12.142
+      ],
+      "label": "MOLLSJÖVÄGEN PARKING",
+      "travelMode": "driving",
+      "icon": "bike"
+    },
+    {
+      "coordinates": [
+        57.844625,
+        12.111491
+      ],
+      "label": "DESTINATION: GRILLPLATS",
+      "travelMode": "direct",
+      "icon": "person"
+    }
+  ],
+  "animation": {
+    "totalDuration": 25000,
+    "lineColor": "#8B4513",
+    "lineWidth": 4
+  }
+}

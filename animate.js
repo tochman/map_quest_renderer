@@ -1,9 +1,14 @@
 import puppeteer from 'puppeteer';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { readFile } from 'fs/promises';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Load destinations from JSON
+const destinationsPath = join(__dirname, 'destinations.json');
+const destinationsConfig = JSON.parse(await readFile(destinationsPath, 'utf-8'));
 
 // Function to geocode an address
 async function geocodeAddress(address) {
@@ -29,19 +34,26 @@ async function geocodeAddress(address) {
     return null;
 }
 
-// Get exact coordinates
-console.log('Geocoding Stannums Byväg 20...');
-const startPoint = await geocodeAddress('Stannums Byväg 20, Lerum, Sweden');
-const endPoint = [57.81356, 12.1706]; // Bergum
+// Get start coordinates
+console.log(`Geocoding ${destinationsConfig.start.address}...`);
+const startPoint = await geocodeAddress(destinationsConfig.start.address);
 
 if (!startPoint) {
-    console.error('Could not geocode start address, using approximate coordinates');
-    startPoint = [57.7, 12.3];
+    console.error('Could not geocode start address');
+    process.exit(1);
 }
 
 // Function to get route waypoints from OSRM (free routing service)
-async function getRouteCoordinates(start, end) {
-    const url = `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${end[1]},${end[0]}?overview=full&geometries=geojson`;
+// Supports via waypoints to force the route through specific points
+async function getRouteCoordinates(start, end, profile = 'driving', viaPoints = []) {
+    // Build coordinates string: start;via1;via2;...;end
+    let coordsString = `${start[1]},${start[0]}`;
+    for (const via of viaPoints) {
+        coordsString += `;${via[1]},${via[0]}`;
+    }
+    coordsString += `;${end[1]},${end[0]}`;
+    
+    const url = `https://router.project-osrm.org/route/v1/${profile}/${coordsString}?overview=full&geometries=geojson`;
     
     try {
         const response = await fetch(url);
@@ -62,8 +74,60 @@ async function getRouteCoordinates(start, end) {
     return [start, end];
 }
 
-// Get road-based coordinates
-const coordinates = await getRouteCoordinates(startPoint, endPoint);
+// Build route segments from configuration
+// Each segment represents travel FROM one point TO the next
+const routeSegments = [];
+let currentPoint = startPoint;
+let previousLabel = destinationsConfig.start.label;
+
+console.log(`Building route with ${destinationsConfig.stops.length} stops...`);
+for (let i = 0; i < destinationsConfig.stops.length; i++) {
+    const stop = destinationsConfig.stops[i];
+    const nextPoint = stop.coordinates;
+    
+    let coords;
+    if (stop.travelMode === 'direct') {
+        // Direct line (as the crow flies) for hiking through woods
+        // Interpolate points for smooth animation
+        console.log(`Creating direct route (${stop.icon}) from "${previousLabel}" to "${stop.label || 'waypoint'}"...`);
+        const numPoints = 50; // Add intermediate points for smooth animation
+        coords = [];
+        for (let j = 0; j <= numPoints; j++) {
+            const t = j / numPoints;
+            coords.push([
+                currentPoint[0] + (nextPoint[0] - currentPoint[0]) * t,
+                currentPoint[1] + (nextPoint[1] - currentPoint[1]) * t
+            ]);
+        }
+        console.log(`Direct route created with ${coords.length} interpolated points`);
+    } else {
+        // Get via points if specified
+        const viaPoints = stop.viaPoints || [];
+        if (viaPoints.length > 0) {
+            console.log(`Getting ${stop.travelMode} route (${stop.icon}) from "${previousLabel}" to "${stop.label || 'waypoint'}" via ${viaPoints.length} waypoints...`);
+        } else {
+            console.log(`Getting ${stop.travelMode} route (${stop.icon}) from "${previousLabel}" to "${stop.label || 'waypoint'}"...`);
+        }
+        coords = await getRouteCoordinates(currentPoint, nextPoint, stop.travelMode, viaPoints);
+    }
+    
+    routeSegments.push({
+        coordinates: coords,
+        icon: stop.icon,
+        fromLabel: previousLabel,
+        toLabel: stop.label,
+        travelMode: stop.travelMode,
+        showMarker: stop.label !== null  // Only show marker if there's a label
+    });
+    
+    currentPoint = nextPoint;
+    if (stop.label) {
+        previousLabel = stop.label;
+    }
+}
+
+// Combine all coordinates for zoom calculation
+const allCoordinates = routeSegments.flatMap(seg => seg.coordinates);
 
 // Calculate smart zoom level based on distance
 function calculateZoom(coords) {
@@ -83,13 +147,22 @@ function calculateZoom(coords) {
     return 13;
 }
 
+// Calculate total waypoints for proportional timing
+const totalWaypoints = allCoordinates.length;
+const secondsPerWaypoint = 0.08; // Slower speed for better viewing (0.08 = ~12 waypoints per second)
+const calculatedDuration = Math.max(30000, totalWaypoints * secondsPerWaypoint * 1000); // Min 30 seconds
+console.log(`Animation duration: ${calculatedDuration/1000} seconds for ${totalWaypoints} waypoints`);
+
 // Animation options
 const options = {
-    zoom: calculateZoom(coordinates),
-    lineColor: '#8B4513',  // Saddle brown
-    lineWidth: 4,
-    animationDuration: 10000, // 10 seconds for route drawing portion
-    useSmoothing: true
+    zoom: calculateZoom(allCoordinates),
+    lineColor: destinationsConfig.animation.lineColor,
+    lineWidth: destinationsConfig.animation.lineWidth,
+    animationDuration: calculatedDuration,
+    useSmoothing: true,
+    finalDestination: destinationsConfig.stops[destinationsConfig.stops.length - 1].label,
+    title: destinationsConfig.title || 'ADVENTURE',
+    date: destinationsConfig.date || new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 };
 
 async function createMapAnimation() {
@@ -113,11 +186,11 @@ async function createMapAnimation() {
     await page.waitForFunction(() => window.L !== undefined);
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    // Initialize map with coordinates
+    // Initialize map with route segments
     console.log('Initializing map...');
-    await page.evaluate((coords, opts) => {
-        window.initMap(coords, opts);
-    }, coordinates, options);
+    await page.evaluate((segments, opts) => {
+        window.initMap(segments, opts);
+    }, routeSegments, options);
     
     // Wait for tiles to load with multiple checks
     console.log('Waiting for map tiles to load...');
@@ -156,12 +229,31 @@ async function createMapAnimation() {
         });
     });
     
-    // Start video recording
+    // Start video recording with high frame rate
     console.log('Starting animation and recording...');
-    const recorder = await page.screencast({ path: 'map-animation.webm' });
+    const recorder = await page.screencast({ 
+        path: 'map-animation.webm',
+        speed: 1,
+        scale: 1,
+        crop: { x: 0, y: 0, width: 1920, height: 1080 }
+    });
     
-    // Animate the route
-    await page.evaluate(() => window.animateRoute());
+    // Wait for animation function to be ready
+    await page.waitForFunction(() => typeof window.animateRoute === 'function', { timeout: 5000 });
+    
+    // Animate the route with error handling
+    try {
+        await page.evaluate(async () => {
+            if (typeof window.animateRoute === 'function') {
+                await window.animateRoute();
+            } else {
+                throw new Error('animateRoute function not found');
+            }
+        });
+    } catch (error) {
+        console.error('Animation error:', error);
+        // Continue to try to save what we have
+    }
     
     // Wait a moment at the end
     await new Promise(resolve => setTimeout(resolve, 2000));
