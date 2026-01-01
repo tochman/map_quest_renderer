@@ -5,7 +5,9 @@
   "main": "animate.js",
   "type": "module",
   "scripts": {
+    "preview": "node animate.js",
     "animate": "node animate.js",
+    "render": "node animate-frames.js",
     "frames": "node animate-frames.js",
     "smooth": "ffmpeg -y -i map-animation.mp4 -vf 'minterpolate=fps=60:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1' -c:v libx264 -pix_fmt yuv420p -preset slow -crf 18 -movflags +faststart map-animation-smooth.mp4",
     "oldfilm": "ffmpeg -y -i map-animation.mp4 -vf 'noise=alls=20:allf=t+u,colorchannelmixer=.393:.769:.189:0:.349:.686:.168:0:.272:.534:.131,eq=contrast=1.1:brightness=0.05:saturation=0.8,curves=vintage' -c:v libx264 -pix_fmt yuv420p -preset slow -crf 18 -movflags +faststart map-animation-oldfilm.mp4"

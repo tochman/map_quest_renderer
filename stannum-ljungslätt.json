@@ -1,50 +1,52 @@
 {
-  "title": "Solo trip Vättlefjäll",
-  "date": "December 31, 2025",
+  "title": "Road Trip to Campino",
+  "date": "June 2024",
   "start": {
     "address": "Stannums Byväg 20, Lerum, Sweden",
-    "label": "START: STANNUM"
+    "label": "Stannum"
   },
   "stops": [
     {
       "coordinates": [
-        57.81356,
-        12.1706
+        57.841426,
+        12.285938
       ],
-      "label": "BERGUMS KYRKA",
+      "label": "Gulf Gråbo",
       "travelMode": "driving",
       "icon": "car"
     },
     {
       "coordinates": [
-        57.845,
-        12.142
+        57.877093,
+        12.282847
       ],
-      "label": "MOLLSJÖVÄGEN PARKING",
+      "label": "Ljungslätt - Parkering",
       "travelMode": "driving",
-      "icon": "bike"
+      "icon": "car"
     },
     {
       "coordinates": [
-        57.844625,
-        12.111491
+        57.877093,
+        12.282847
       ],
-      "label": "DESTINATION: GRILLPLATS",
+      "label": "Ljungslätt - Scoutstugan",
       "travelMode": "feet",
       "icon": "backpacker"
-    }, {
+    },
+    {
       "coordinates": [
-        57.8363166667,
-        12.1122
+        57.87336,
+        12.25694
       ],
-      "label": "Target: VARGGROPEN",
+      "label": "Kvarnruinen",
       "travelMode": "feet",
       "icon": "backpacker"
     }
   ],
   "animation": {
-    "totalDuration": 25000,
     "lineColor": "#8B4513",
-    "lineWidth": 4
+    "lineWidth": 4,
+    "duration": 12000,
+    "useSmoothing": true
   }
 }

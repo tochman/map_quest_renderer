@@ -286,7 +286,8 @@
                 useSmoothing = true,
                 finalDestination = 'DESTINATION',
                 title = 'ADVENTURE',
-                date = ''
+                date = '',
+                tileLayer = null
             } = options;
             
             // Clean up existing map if present (for re-initialization)
@@ -325,11 +326,15 @@
                 fadeAnimation: true
             }).setView([centerLat, centerLng], zoom);
             
-            // Add reliable OpenStreetMap tile layer (we'll style it vintage with CSS)
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 18,
-                attribution: '&copy; OpenStreetMap contributors'
-            }).addTo(map);
+            // Add tile layer (use provided or default to OSM)
+            if (tileLayer && tileLayer.url) {
+                L.tileLayer(tileLayer.url, tileLayer.options || {}).addTo(map);
+            } else {
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 18,
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(map);
+            }
             
             // Fit bounds to show entire route centered
             const bounds = L.latLngBounds(allCoordinates.map(c => [c[0], c[1]]));
@@ -451,7 +456,11 @@
             const startTime = performance.now();
             let animatedLine = null;
             let lastAngle = 0;
-            let lastZoom = startZoom; // Track last zoom for smooth interpolation
+            
+            // Smooth camera state for cinematic tracking
+            let cameraLat = allCoordinates[0][0];
+            let cameraLng = allCoordinates[0][1];
+            let cameraZoom = startZoom;
             
             // Pre-create all waypoint markers and labels (hidden) for fade-in effect
             const waypointMarkers = [];
@@ -584,40 +593,50 @@
                     // Use linear speed for consistent movement (no acceleration/deceleration)
                     const eased = segmentProgress;
                     
-                    // Smooth continuous zoom using sine curve
-                    // Creates a gentle arc: start zoomed in -> zoom out to middle -> zoom back in at end
-                    // Using sine gives perfectly smooth acceleration/deceleration
-                    const zoomCurve = Math.sin(progress * Math.PI); // 0 -> 1 -> 0 (smooth bell curve)
+                    // === CINEMATIC ZOOM ===
+                    const zoomCurve = Math.sin(progress * Math.PI);
                     const targetZoom = startZoom - (startZoom - midZoom) * zoomCurve;
                     
-                    // Faster zoom interpolation for responsive feel
-                    const currentZoom = lastZoom + (targetZoom - lastZoom) * 0.12;
-                    lastZoom = currentZoom;
-                    
-                    // Calculate camera center based on progress within segment
+                    // Calculate vehicle position within segment
                     const totalPoints = coordinates.length - 1;
                     const currentFloat = eased * totalPoints;
                     const currentIndex = Math.floor(currentFloat);
                     const fraction = currentFloat - currentIndex;
                     
-                    // Get current position on route
-                    let cameraCenter;
+                    // Get vehicle position with interpolation
                     const safeIndex = Math.max(0, Math.min(currentIndex, coordinates.length - 1));
                     const safeNextIndex = Math.min(safeIndex + 1, coordinates.length - 1);
                     
+                    let vehiclePos;
                     if (safeIndex < coordinates.length - 1 && fraction > 0) {
                         const current = coordinates[safeIndex];
                         const next = coordinates[safeNextIndex];
-                        cameraCenter = [
+                        vehiclePos = [
                             current[0] + (next[0] - current[0]) * fraction,
                             current[1] + (next[1] - current[1]) * fraction
                         ];
                     } else {
-                        cameraCenter = coordinates[safeIndex];
+                        vehiclePos = coordinates[safeIndex];
                     }
                     
-                    // Smoothly pan and zoom camera
-                    map.setView(cameraCenter, currentZoom, { animate: false });
+                    // === CINEMATIC CAMERA: Look ahead of vehicle ===
+                    const lookAheadDistance = Math.min(30, coordinates.length - safeIndex - 1);
+                    const lookAheadIndex = Math.min(safeIndex + lookAheadDistance, coordinates.length - 1);
+                    const lookAheadPos = coordinates[lookAheadIndex];
+                    
+                    // Blend between vehicle position and look-ahead (more ahead when zoomed out)
+                    const lookAheadBlend = 0.3 * zoomCurve;
+                    const targetLat = vehiclePos[0] + (lookAheadPos[0] - vehiclePos[0]) * lookAheadBlend;
+                    const targetLng = vehiclePos[1] + (lookAheadPos[1] - vehiclePos[1]) * lookAheadBlend;
+                    
+                    // Smooth camera POSITION tracking (but zoom is direct)
+                    const positionSmoothing = 0.12;
+                    
+                    cameraLat += (targetLat - cameraLat) * positionSmoothing;
+                    cameraLng += (targetLng - cameraLng) * positionSmoothing;
+                    
+                    // Set camera - smooth position, direct zoom
+                    map.setView([cameraLat, cameraLng], targetZoom, { animate: false });
                     
                     // Get visible coordinates for line drawing
                     const visibleCoords = coordinates.slice(0, safeIndex + 1);
@@ -669,48 +688,96 @@
                         currentIcon.style.left = (point.x - iconOffset) + 'px';
                         currentIcon.style.top = (point.y - iconOffset) + 'px';
                         
-                        // Rotate icons based on direction (only bike and car rotate - person and backpacker stay upright)
-                        if (currentIconType === 'bike' || currentIconType === 'car') {
-                            // Look far ahead for stable direction (50+ waypoints ahead)
-                            const lookAhead = Math.min(coordinates.length - 1, safeIndex + 50);
-                            const fromPos = coordinates[safeIndex];
-                            const toPos = coordinates[lookAhead];
+                        // =====================================================
+                        // ICON ORIENTATION LOGIC
+                        // =====================================================
+                        // Icon default orientations (VERIFIED):
+                        //   - car.png: faces LEFT ← (hood on left)
+                        //   - bike.png: faces LEFT ← (handlebars on left)
+                        //   - backpack.png: faces LEFT ← 
+                        //   - person.png: faces RIGHT →
+                        // =====================================================
+                        
+                        // Look FAR ahead on the route for stable direction (50+ points)
+                        const lookAhead = Math.min(coordinates.length - 1, safeIndex + 60);
+                        const fromPos = coordinates[safeIndex];
+                        const toPos = coordinates[lookAhead];
+                        
+                        // Convert to screen coordinates
+                        const fromPoint = map.latLngToContainerPoint(fromPos);
+                        const toPoint = map.latLngToContainerPoint(toPos);
+                        
+                        // Calculate direction vector
+                        const dx = toPoint.x - fromPoint.x;  // positive = moving right
+                        const dy = toPoint.y - fromPoint.y;  // positive = moving down
+                        
+                        // atan2 gives: 0°=right, 90°=down, ±180°=left, -90°=up
+                        const direction = Math.atan2(dy, dx) * 180 / Math.PI;
+                        
+                        if (currentIconType === 'car') {
+                            // CAR is SIDE VIEW facing RIGHT
+                            // Flip when going left, tilt follows road angle dynamically
+                            const goingLeft = Math.abs(direction) > 90;
+                            const scaleX = goingLeft ? -1 : 1;
                             
-                            // Convert to screen coordinates
-                            const fromPoint = map.latLngToContainerPoint(fromPos);
-                            const toPoint = map.latLngToContainerPoint(toPos);
-                            
-                            // Calculate direction in screen space
-                            const dx = toPoint.x - fromPoint.x;
-                            const dy = toPoint.y - fromPoint.y;
-                            
-                            // Only update if there's significant movement (higher threshold)
-                            if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
-                                // Calculate target angle
-                                // bike faces LEFT (add 180°), car faces RIGHT (no offset)
-                                const angleOffset = (currentIconType === 'car') ? 0 : 180;
-                                let targetAngle = Math.atan2(dy, dx) * 180 / Math.PI + angleOffset;
-                                
-                                // Normalize to -180 to 180
-                                while (targetAngle > 180) targetAngle -= 360;
-                                while (targetAngle < -180) targetAngle += 360;
-                                
-                                // Only apply if angle change is significant (> 5 degrees)
-                                let angleDiff = targetAngle - lastAngle;
-                                while (angleDiff > 180) angleDiff -= 360;
-                                while (angleDiff < -180) angleDiff += 360;
-                                
-                                if (Math.abs(angleDiff) > 5) {
-                                    // Very slow interpolation for smooth cinematic feel
-                                    lastAngle = lastAngle + angleDiff * 0.05;
-                                }
-                                
-                                currentIcon.style.transform = `rotate(${lastAngle}deg)`;
-                                currentIcon.style.transformOrigin = `${iconOffset}px ${iconOffset}px`;
+                            // Tilt = road angle relative to horizontal
+                            // When going right: tilt directly from direction
+                            // When going left: adjust for the flip
+                            let tilt;
+                            if (goingLeft) {
+                                tilt = direction > 0 ? -(direction - 180) : -(direction + 180);
+                            } else {
+                                tilt = direction;
                             }
+                            
+                            // Smooth interpolation
+                            let angleDiff = tilt - lastAngle;
+                            while (angleDiff > 180) angleDiff -= 360;
+                            while (angleDiff < -180) angleDiff += 360;
+                            if (Math.abs(angleDiff) > 2) {
+                                lastAngle = lastAngle + angleDiff * 0.1;
+                            }
+                            
+                            currentIcon.style.transform = `scaleX(${scaleX}) rotate(${lastAngle}deg)`;
+                            currentIcon.style.transformOrigin = 'center center';
+                            
+                        } else if (currentIconType === 'bike') {
+                            // BIKE is SIDE VIEW facing LEFT  
+                            // Flip when going right, tilt follows road angle dynamically
+                            const goingRight = Math.abs(direction) <= 90;
+                            const scaleX = goingRight ? -1 : 1;
+                            
+                            // Tilt = road angle relative to horizontal
+                            let tilt;
+                            if (goingRight) {
+                                tilt = -direction;  // Negate because bike faces opposite
+                            } else {
+                                tilt = direction > 0 ? direction - 180 : direction + 180;
+                            }
+                            
+                            // Smooth interpolation
+                            let angleDiff = tilt - lastAngle;
+                            while (angleDiff > 180) angleDiff -= 360;
+                            while (angleDiff < -180) angleDiff += 360;
+                            if (Math.abs(angleDiff) > 2) {
+                                lastAngle = lastAngle + angleDiff * 0.1;
+                            }
+                            
+                            currentIcon.style.transform = `scaleX(${scaleX}) rotate(${lastAngle}deg)`;
+                            currentIcon.style.transformOrigin = 'center center';
+                            
                         } else {
-                            // Person and backpacker stay upright - no rotation
-                            currentIcon.style.transform = 'rotate(0deg)';
+                            // PERSON and BACKPACKER - stay upright, flip horizontally
+                            const travelingLeft = dx < 0;
+                            
+                            if (currentIconType === 'backpacker') {
+                                // Backpacker faces LEFT by default, flip when going RIGHT
+                                currentIcon.style.transform = travelingLeft ? 'scaleX(1)' : 'scaleX(-1)';
+                            } else {
+                                // Person faces RIGHT by default, flip when going LEFT
+                                currentIcon.style.transform = travelingLeft ? 'scaleX(-1)' : 'scaleX(1)';
+                            }
+                            currentIcon.style.transformOrigin = 'center center';
                         }
                     }
                     

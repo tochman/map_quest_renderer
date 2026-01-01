@@ -27,6 +27,64 @@ const resumeMode = process.argv.includes('--resume');
 console.log(`Loading destinations from: ${basename(destinationsPath)}`);
 const destinationsConfig = JSON.parse(await readFile(destinationsPath, 'utf-8'));
 
+// Tile layer configurations (all free, no API key required)
+const TILE_LAYERS = {
+    osm: {
+        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        options: { maxZoom: 19, attribution: '© OpenStreetMap contributors' }
+    },
+    watercolor: {
+        // Stamen Watercolor hosted on archive.org (no API key needed)
+        url: 'https://watercolormaps.collection.cooperhewitt.org/tile/watercolor/{z}/{x}/{y}.jpg',
+        options: { minZoom: 1, maxZoom: 16, attribution: '© Stamen Design © OpenStreetMap' }
+    },
+    terrain: {
+        // OpenTopoMap - free terrain tiles
+        url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+        options: { maxZoom: 17, attribution: '© OpenTopoMap © OpenStreetMap' }
+    },
+    toner: {
+        // CartoDB Positron (light, clean style - similar to toner)
+        url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+        options: { maxZoom: 20, attribution: '© CartoDB © OpenStreetMap' }
+    },
+    dark: {
+        // CartoDB Dark Matter
+        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+        options: { maxZoom: 20, attribution: '© CartoDB © OpenStreetMap' }
+    },
+    voyager: {
+        // CartoDB Voyager (colorful, modern)
+        url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+        options: { maxZoom: 20, attribution: '© CartoDB © OpenStreetMap' }
+    },
+    humanitarian: {
+        // Humanitarian OpenStreetMap
+        url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+        options: { maxZoom: 19, attribution: '© HOT © OpenStreetMap' }
+    }
+};
+
+// Parse --tile argument
+const tileArg = process.argv.find(arg => arg.startsWith('--tile'));
+let selectedTile = 'osm'; // default
+if (tileArg) {
+    const tileIndex = process.argv.indexOf(tileArg);
+    if (tileArg.includes('=')) {
+        selectedTile = tileArg.split('=')[1];
+    } else if (process.argv[tileIndex + 1] && !process.argv[tileIndex + 1].startsWith('-')) {
+        selectedTile = process.argv[tileIndex + 1];
+    }
+}
+
+if (!TILE_LAYERS[selectedTile]) {
+    console.error(`Unknown tile layer: ${selectedTile}`);
+    console.error(`Available tiles: ${Object.keys(TILE_LAYERS).join(', ')}`);
+    process.exit(1);
+}
+
+console.log(`Using tile layer: ${selectedTile}`);
+
 // Function to geocode an address
 async function geocodeAddress(address) {
     const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`;
@@ -204,7 +262,9 @@ const options = {
     lineWidth: destinationsConfig.animation?.lineWidth || 4,
     finalDestination: destinationsConfig.stops[destinationsConfig.stops.length - 1].label,
     title: destinationsConfig.title || 'ADVENTURE',
-    date: destinationsConfig.date || new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+    date: destinationsConfig.date || new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+    // Tile layer
+    tileLayer: TILE_LAYERS[selectedTile]
 };
 
 async function createFrameByFrameAnimation() {
@@ -283,8 +343,12 @@ async function createFrameByFrameAnimation() {
         
         // Animation state (persistent across frames)
         window.animState = {
-            lastAngle: 0,
-            lastZoom: startZoom,
+            // Track angle per icon type to avoid issues when switching icons
+            lastAngles: { bike: 0, car: 0, person: 0, backpacker: 0 },
+            // Smooth camera tracking
+            cameraLat: null,
+            cameraLng: null,
+            cameraZoom: null,
             animatedLine: null,
             startMarker: null,
             endMarker: null,
@@ -366,21 +430,36 @@ async function createFrameByFrameAnimation() {
                     }).addTo(map);
                     
                     state.startMarkerPlaced = true;
+                    
+                    // Initialize camera position at overview
+                    const overviewCenter = bounds.getCenter();
+                    const overviewZoom = map.getBoundsZoom(bounds, false, [50, 50]);
+                    state.cameraLat = overviewCenter.lat;
+                    state.cameraLng = overviewCenter.lng;
+                    state.cameraZoom = overviewZoom;
                 }
                 
-                // Smoothly pan and zoom to start point
+                // Target: start point at close zoom
                 const startCoord = allCoordinates[0];
-                const overviewCenter = bounds.getCenter();
-                const overviewZoom = map.getBoundsZoom(bounds, false, [50, 50]);
+                const targetZoom = startZoom;
                 
-                // Ease function for smooth pan
+                // Smooth ease-out cubic for cinematic feel
                 const easeProgress = 1 - Math.pow(1 - panProgress, 3);
                 
-                const currentLat = overviewCenter.lat + (startCoord[0] - overviewCenter.lat) * easeProgress;
-                const currentLng = overviewCenter.lng + (startCoord[1] - overviewCenter.lng) * easeProgress;
-                const currentZoom = overviewZoom + (14 - overviewZoom) * easeProgress;
+                // Calculate target positions
+                const overviewCenter = bounds.getCenter();
+                const overviewZoom = map.getBoundsZoom(bounds, false, [50, 50]);
+                const targetLat = overviewCenter.lat + (startCoord[0] - overviewCenter.lat) * easeProgress;
+                const targetLng = overviewCenter.lng + (startCoord[1] - overviewCenter.lng) * easeProgress;
+                const targetZoomInterp = overviewZoom + (targetZoom - overviewZoom) * easeProgress;
                 
-                map.setView([currentLat, currentLng], currentZoom, { animate: false });
+                // Smooth camera interpolation (creates fluid motion)
+                const smoothing = 0.15;
+                state.cameraLat += (targetLat - state.cameraLat) * smoothing;
+                state.cameraLng += (targetLng - state.cameraLng) * smoothing;
+                state.cameraZoom += (targetZoomInterp - state.cameraZoom) * smoothing;
+                
+                map.setView([state.cameraLat, state.cameraLng], state.cameraZoom, { animate: false });
                 
                 return;
             }
@@ -513,33 +592,53 @@ async function createFrameByFrameAnimation() {
                 const zoomCurve = Math.sin(routeProgress * Math.PI);
                 const targetZoom = startZoom - (startZoom - midZoom) * zoomCurve;
                 
-                // Slower zoom interpolation for very smooth feel
-                state.lastZoom = state.lastZoom + (targetZoom - state.lastZoom) * 0.08;
-                
                 // Calculate position within current segment
                 const totalPoints = coordinates.length - 1;
                 const currentFloat = segmentProgress * totalPoints;
                 const currentIndex = Math.floor(currentFloat);
                 const fraction = currentFloat - currentIndex;
                 
-                // Get camera center with interpolation
+                // Get vehicle position with interpolation
                 const safeIndex = Math.max(0, Math.min(currentIndex, coordinates.length - 1));
                 const safeNextIndex = Math.min(safeIndex + 1, coordinates.length - 1);
                 
-                let cameraCenter;
+                let vehiclePos;
                 if (safeIndex < coordinates.length - 1 && fraction > 0) {
                     const current = coordinates[safeIndex];
                     const next = coordinates[safeNextIndex];
-                    cameraCenter = [
+                    vehiclePos = [
                         current[0] + (next[0] - current[0]) * fraction,
                         current[1] + (next[1] - current[1]) * fraction
                     ];
                 } else {
-                    cameraCenter = coordinates[safeIndex];
+                    vehiclePos = coordinates[safeIndex];
                 }
                 
-                // Set camera position (FOLLOWING the vehicle)
-                map.setView(cameraCenter, state.lastZoom, { animate: false });
+                // === CINEMATIC CAMERA: Look ahead of vehicle ===
+                // Camera leads the vehicle by looking at a point ahead on the route
+                const lookAheadDistance = Math.min(30, coordinates.length - safeIndex - 1);
+                const lookAheadIndex = Math.min(safeIndex + lookAheadDistance, coordinates.length - 1);
+                const lookAheadPos = coordinates[lookAheadIndex];
+                
+                // Blend between vehicle position and look-ahead (more ahead when zoomed out)
+                const lookAheadBlend = 0.3 * zoomCurve; // More look-ahead when zoomed out
+                const targetLat = vehiclePos[0] + (lookAheadPos[0] - vehiclePos[0]) * lookAheadBlend;
+                const targetLng = vehiclePos[1] + (lookAheadPos[1] - vehiclePos[1]) * lookAheadBlend;
+                
+                // Initialize camera if needed (first frame of route phase)
+                if (state.cameraLat === null) {
+                    state.cameraLat = targetLat;
+                    state.cameraLng = targetLng;
+                }
+                
+                // Smooth camera POSITION tracking (zoom is direct for visible effect)
+                const positionSmoothing = 0.12;
+                
+                state.cameraLat += (targetLat - state.cameraLat) * positionSmoothing;
+                state.cameraLng += (targetLng - state.cameraLng) * positionSmoothing;
+                
+                // Set camera - smooth position, DIRECT zoom for visible effect
+                map.setView([state.cameraLat, state.cameraLng], targetZoom, { animate: false });
                 
                 // Build visible coordinates for line
                 const visibleCoords = coordinates.slice(0, safeIndex + 1);
@@ -598,25 +697,26 @@ async function createFrameByFrameAnimation() {
                     
                     // Use IconRenderer for transform calculation
                     if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+                        const iconLastAngle = state.lastAngles[currentIconType] || 0;
+                        
                         const transform = window.IconRenderer.calculateIconTransform(
                             currentIconType,
                             dx,
                             dy,
-                            state.lastAngle,
+                            iconLastAngle,
                             0.15  // interpolation factor
                         );
                         
-                        state.lastAngle = transform.newLastAngle;
+                        state.lastAngles[currentIconType] = transform.newLastAngle;
                         
                         // Build transform string
                         const transformStr = window.IconRenderer.getIconTransformCSS(
                             transform.angle,
-                            transform.scaleX,
-                            iconSize
+                            transform.scaleX
                         );
                         
                         currentIcon.style.transform = transformStr;
-                        currentIcon.style.transformOrigin = `${iconOffset}px ${iconOffset}px`;
+                        currentIcon.style.transformOrigin = 'center center';
                     }
                 }
                 

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Icon Direction Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(4, 200px); gap: 20px; margin: 20px 0; }
+        .cell { border: 1px solid #ccc; padding: 10px; text-align: center; background: #f9f9f9; }
+        .icon { width: 80px; height: 80px; object-fit: contain; }
+        h2 { margin-top: 40px; }
+        .direction { color: #666; margin-top: 5px; }
+        .arrow { font-size: 24px; }
+    </style>
+</head>
+<body>
+    <h1>Icon Direction Test</h1>
+    <p>This page shows how icons appear at different CSS rotation angles.</p>
+    <p>We want: 0° = East (→), 90° = South (↓), 180° = West (←), -90° = North (↑)</p>
+
+    <h2>Car (512x512)</h2>
+    <div class="grid">
+        <div class="cell">
+            <img src="car.png" class="icon" style="transform: rotate(0deg)">
+            <div>rotate(0deg)</div>
+            <div class="direction">Default position</div>
+        </div>
+        <div class="cell">
+            <img src="car.png" class="icon" style="transform: rotate(90deg)">
+            <div>rotate(90deg)</div>
+            <div class="direction">90° clockwise</div>
+        </div>
+        <div class="cell">
+            <img src="car.png" class="icon" style="transform: rotate(180deg)">
+            <div>rotate(180deg)</div>
+            <div class="direction">180° (flipped)</div>
+        </div>
+        <div class="cell">
+            <img src="car.png" class="icon" style="transform: rotate(-90deg)</div>">
+            <div>rotate(-90deg)</div>
+            <div class="direction">90° counter-clockwise</div>
+        </div>
+    </div>
+
+    <h2>Bike (512x512)</h2>
+    <div class="grid">
+        <div class="cell">
+            <img src="bike.png" class="icon" style="transform: rotate(0deg)">
+            <div>rotate(0deg)</div>
+            <div class="direction">Default position</div>
+        </div>
+        <div class="cell">
+            <img src="bike.png" class="icon" style="transform: rotate(90deg)">
+            <div>rotate(90deg)</div>
+            <div class="direction">90° clockwise</div>
+        </div>
+        <div class="cell">
+            <img src="bike.png" class="icon" style="transform: rotate(180deg)">
+            <div>rotate(180deg)</div>
+            <div class="direction">180° (flipped)</div>
+        </div>
+        <div class="cell">
+            <img src="bike.png" class="icon" style="transform: rotate(-90deg)">
+            <div>rotate(-90deg)</div>
+            <div class="direction">90° counter-clockwise</div>
+        </div>
+    </div>
+
+    <h2>Backpack (300x464)</h2>
+    <div class="grid">
+        <div class="cell">
+            <img src="backpack.png" class="icon" style="transform: rotate(0deg)">
+            <div>rotate(0deg)</div>
+            <div class="direction">Default position</div>
+        </div>
+        <div class="cell">
+            <img src="backpack.png" class="icon" style="transform: rotate(90deg)">
+            <div>rotate(90deg)</div>
+            <div class="direction">90° clockwise</div>
+        </div>
+        <div class="cell">
+            <img src="backpack.png" class="icon" style="transform: rotate(180deg)">
+            <div>rotate(180deg)</div>
+            <div class="direction">180° (flipped)</div>
+        </div>
+        <div class="cell">
+            <img src="backpack.png" class="icon" style="transform: rotate(-90deg)">
+            <div>rotate(-90deg)</div>
+            <div class="direction">90° counter-clockwise</div>
+        </div>
+    </div>
+
+    <h2>Person (512x512)</h2>
+    <div class="grid">
+        <div class="cell">
+            <img src="person.png" class="icon" style="transform: rotate(0deg)">
+            <div>rotate(0deg)</div>
+            <div class="direction">Default position</div>
+        </div>
+        <div class="cell">
+            <img src="person.png" class="icon" style="transform: rotate(90deg)">
+            <div>rotate(90deg)</div>
+            <div class="direction">90° clockwise</div>
+        </div>
+        <div class="cell">
+            <img src="person.png" class="icon" style="transform: rotate(180deg)">
+            <div>rotate(180deg)</div>
+            <div class="direction">180° (flipped)</div>
+        </div>
+        <div class="cell">
+            <img src="person.png" class="icon" style="transform: rotate(-90deg)">
+            <div>rotate(-90deg)</div>
+            <div class="direction">90° counter-clockwise</div>
+        </div>
+    </div>
+
+    <h2>What we need</h2>
+    <table border="1" cellpadding="10">
+        <tr>
+            <th>Travel Direction</th>
+            <th>Arrow</th>
+            <th>atan2 angle</th>
+            <th>Needed CSS</th>
+        </tr>
+        <tr>
+            <td>East (right)</td>
+            <td class="arrow">→</td>
+            <td>0°</td>
+            <td>Icon should point right</td>
+        </tr>
+        <tr>
+            <td>South (down)</td>
+            <td class="arrow">↓</td>
+            <td>90°</td>
+            <td>Icon should point down</td>
+        </tr>
+        <tr>
+            <td>West (left)</td>
+            <td class="arrow">←</td>
+            <td>±180°</td>
+            <td>Icon should point left</td>
+        </tr>
+        <tr>
+            <td>North (up)</td>
+            <td class="arrow">↑</td>
+            <td>-90°</td>
+            <td>Icon should point up</td>
+        </tr>
+    </table>
+
+    <h2>CSS Rotation Reference</h2>
+    <p>CSS rotations are <strong>clockwise</strong> for positive angles.</p>
+    <div class="grid">
+        <div class="cell">
+            <div style="font-size: 40px; transform: rotate(0deg)">→</div>
+            <div>rotate(0deg)</div>
+            <div class="direction">Points right/east</div>
+        </div>
+        <div class="cell">
+            <div style="font-size: 40px; transform: rotate(90deg)">→</div>
+            <div>rotate(90deg)</div>
+            <div class="direction">Points down/south</div>
+        </div>
+        <div class="cell">
+            <div style="font-size: 40px; transform: rotate(180deg)">→</div>
+            <div>rotate(180deg)</div>
+            <div class="direction">Points left/west</div>
+        </div>
+        <div class="cell">
+            <div style="font-size: 40px; transform: rotate(-90deg)">→</div>
+            <div>rotate(-90deg)</div>
+            <div class="direction">Points up/north</div>
+        </div>
+    </div>
+</body>
+</html>

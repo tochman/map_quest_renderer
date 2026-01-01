@@ -10,29 +10,74 @@ npm install
 
 ## Usage
 
-```bash
-# Run with default destinations.json
-npm run animate
+### Preview Mode (Recommended First Step)
 
-# Run with custom JSON file
-npm run animate -- gulf-campino.json
+Preview your animation in a browser window before rendering:
+
+```bash
+# Preview with default destinations.json
+npm run preview
+
+# Preview with custom JSON file
+npm run preview stannum-ljungslätt.json
+
+# Preview with different tile style
+npm run preview stannum-ljungslätt.json --tile watercolor
 ```
 
-This will create a `map-animation.mp4` video file.
+The browser stays open after playback so you can inspect the result.
 
-### Smooth 60fps Version (Optional)
+### Render to Video
 
-For a smoother video with motion interpolation (slow, CPU intensive):
+When happy with the preview, render to MP4:
 
 ```bash
+# Render with default destinations.json
+npm run render
+
+# Render with custom JSON file
+npm run render gulf-campino.json
+
+# Render with different tile style
+npm run render gulf-campino.json --tile watercolor
+```
+
+This creates a `map-animation.mp4` video file using frame-by-frame capture for guaranteed smooth playback.
+
+### Post-Processing (Optional)
+
+```bash
+# Smooth 60fps version with motion interpolation (slow, CPU intensive)
 npm run smooth
+
+# Old film effect (grain, sepia, vintage look)
+npm run oldfilm
 ```
 
-This creates `map-animation-smooth.mp4` with 60fps interpolation.
+## Tile Layers
+
+Choose different map styles with the `--tile` flag:
+
+| Name | Description |
+|------|-------------|
+| `osm` | OpenStreetMap (default) |
+| `watercolor` | Stamen Watercolor - artistic, painterly style |
+| `terrain` | OpenTopoMap - topographic with elevation |
+| `toner` | CartoDB Positron - light, clean, minimal |
+| `dark` | CartoDB Dark Matter - dark mode style |
+| `voyager` | CartoDB Voyager - colorful, modern |
+| `humanitarian` | Humanitarian OSM - clear, high contrast |
+
+**Examples:**
+```bash
+npm run preview trip.json --tile watercolor
+npm run render trip.json --tile terrain
+npm run preview trip.json --tile=dark
+```
 
 ## Configuration
 
-All route and animation settings are configured in `destinations.json`:
+All route and animation settings are configured in a JSON file:
 
 ```json
 {
@@ -63,7 +108,6 @@ All route and animation settings are configured in `destinations.json`:
     }
   ],
   "animation": {
-    "totalDuration": 25000,
     "lineColor": "#8B4513",
     "lineWidth": 4
   }
@@ -79,50 +123,90 @@ All route and animation settings are configured in `destinations.json`:
 | `start.address` | Starting location (geocoded automatically) |
 | `start.label` | Label shown at starting point |
 | `stops[].coordinates` | `[latitude, longitude]` of each waypoint |
-| `stops[].label` | Label for the waypoint |
-| `stops[].travelMode` | `"driving"` (uses OSRM routing) or `"direct"` (straight line) |
-| `stops[].icon` | `"bike"`, `"person"`, `"car"`, or `"backpacker"` - icon shown during this segment |
+| `stops[].address` | Alternative to coordinates - will be geocoded |
+| `stops[].label` | Label for the waypoint (use `null` for unlabeled waypoints) |
+| `stops[].travelMode` | `"driving"`, `"cycling"`, `"walking"`, or `"direct"` |
+| `stops[].icon` | `"bike"`, `"person"`, `"car"`, or `"backpacker"` |
 | `stops[].viaPoints` | Optional `[[lat, lng], ...]` to force route through specific points |
 | `animation.lineColor` | Route line color (hex) |
 | `animation.lineWidth` | Route line thickness in pixels |
 
 ### Travel Modes
 
-- **`driving`**: Uses OSRM routing API to follow actual roads
+- **`driving`**: Uses OSRM routing API to follow roads (car routes)
+- **`cycling`**: Uses OSRM cycling profile for bike-friendly routes
+- **`walking`**: Uses OSRM walking profile for pedestrian routes
 - **`direct`**: Draws a straight line (useful for hiking trails, off-road paths)
 
 ### Icons
 
-Place your icon images in the project root:
-- `bike.png` - Motorcycle/bike icon (rotates to follow route direction, faces left)
-- `person.png` - Walking person icon (stays upright)
-- `car.png` - Car icon (rotates to follow route direction, faces right)
-- `backpacker.png` - Backpacker icon (rotates to follow route direction, faces left)
+Icons are stored in the `icons/` folder:
+- `bike.png` - Motorcycle/bike icon (rotates to follow route direction)
+- `car.png` - Car icon (rotates to follow route direction)
+- `person.png` - Walking person icon (mirrors left/right based on direction)
+- `backpack.png` - Backpacker icon (mirrors left/right based on direction)
+
+## Animation Timing
+
+The animation has four phases (32.5 seconds total):
+
+| Phase | Duration | Description |
+|-------|----------|-------------|
+| Title Card | 3s | Shows title and date centered |
+| Pan to Start | 2.5s | Zooms and pans to starting point |
+| Route Animation | 25s | Animated journey along the route |
+| End Card | 2s | Shows destination card |
 
 ## Features
 
-- **Vintage Map Styling**: Sepia-toned OpenStreetMap with parchment overlay
-- **Animated Title Card**: Shows title and date, then transitions to corner
-- **Smart Label Fade-in**: 
-  - Start label visible immediately during initial pan
-  - Waypoint labels fade in when 1/3 of distance away
-- **Multi-segment Routes**: Support for multiple stops with different transport modes
-- **Smooth Icon Rotation**: Bike icon smoothly rotates to follow road direction
-- **Cinematic Camera**: Zooms out to show route overview, then follows the journey
+- **Vintage Map Styling**: Sepia-toned map with parchment overlay
+- **Multiple Tile Layers**: Choose from watercolor, terrain, toner, and more
+- **Animated Title Card**: Shows title and date, then transitions to corner stamp
+- **Smart Label Fade-in**: Waypoint labels fade in when approaching
+- **Multi-segment Routes**: Multiple stops with different transport modes and icons
+- **Smooth Icon Animation**: Icons rotate/mirror smoothly to follow direction
+- **Cinematic Camera**: Smooth zoom transitions (zooms out mid-journey, back in at end)
+- **Frame-by-Frame Capture**: Guarantees smooth video output regardless of system performance
 
 ## Animation Sequence
 
-1. Title card appears with title and date (2.5s)
-2. Title fades, date stamp moves to corner
-3. Overview of entire route shown
-4. Camera pans to starting point
-5. Route animates with icon following the path
-6. Waypoint labels fade in as you approach
-7. Final destination marker and label appear
+1. **Title Card** - Title and date appear centered (3s)
+2. **Pan to Start** - Camera smoothly pans to starting point
+3. **Route Animation** - Icon follows the route with smooth zoom transitions
+4. **Waypoint Labels** - Fade in as you approach each stop
+5. **End Card** - Destination card appears at journey's end
+
+## Project Structure
+
+```
+map_experiments/
+├── animate.js          # Preview mode (browser window)
+├── animate-frames.js   # Render mode (frame-by-frame capture)
+├── map.html            # Map template with Leaflet
+├── package.json        # Dependencies and scripts
+├── icons/
+│   ├── icon-renderer.js  # Icon transform calculations
+│   ├── bike.png
+│   ├── car.png
+│   ├── person.png
+│   └── backpack.png
+└── *.json              # Trip configuration files
+```
 
 ## Dependencies
 
-- **Puppeteer**: Browser automation for recording
+- **Puppeteer**: Headless browser for rendering and capture
 - **Leaflet**: Interactive map library
 - **OSRM**: Open Source Routing Machine (public API)
 - **Nominatim**: OpenStreetMap geocoding service
+- **FFmpeg**: Video encoding (must be installed separately)
+
+## Requirements
+
+- Node.js 18+
+- FFmpeg (for video encoding)
+
+```bash
+# Install FFmpeg on macOS
+brew install ffmpeg
+```

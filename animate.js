@@ -15,6 +15,67 @@ const destinationsPath = jsonArg
 console.log(`Loading destinations from: ${basename(destinationsPath)}`);
 const destinationsConfig = JSON.parse(await readFile(destinationsPath, 'utf-8'));
 
+// Load icon renderer module
+const iconRendererCode = await readFile(join(__dirname, 'icons', 'icon-renderer.js'), 'utf-8');
+
+// Tile layer configurations (all free, no API key required)
+const TILE_LAYERS = {
+    osm: {
+        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        options: { maxZoom: 19, attribution: '© OpenStreetMap contributors' }
+    },
+    watercolor: {
+        // Stamen Watercolor hosted on archive.org (no API key needed)
+        url: 'https://watercolormaps.collection.cooperhewitt.org/tile/watercolor/{z}/{x}/{y}.jpg',
+        options: { minZoom: 1, maxZoom: 16, attribution: '© Stamen Design © OpenStreetMap' }
+    },
+    terrain: {
+        // OpenTopoMap - free terrain tiles
+        url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+        options: { maxZoom: 17, attribution: '© OpenTopoMap © OpenStreetMap' }
+    },
+    toner: {
+        // CartoDB Positron (light, clean style - similar to toner)
+        url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+        options: { maxZoom: 20, attribution: '© CartoDB © OpenStreetMap' }
+    },
+    dark: {
+        // CartoDB Dark Matter
+        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+        options: { maxZoom: 20, attribution: '© CartoDB © OpenStreetMap' }
+    },
+    voyager: {
+        // CartoDB Voyager (colorful, modern)
+        url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+        options: { maxZoom: 20, attribution: '© CartoDB © OpenStreetMap' }
+    },
+    humanitarian: {
+        // Humanitarian OpenStreetMap
+        url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+        options: { maxZoom: 19, attribution: '© HOT © OpenStreetMap' }
+    }
+};
+
+// Parse --tile argument
+const tileArg = process.argv.find(arg => arg.startsWith('--tile'));
+let selectedTile = 'osm'; // default
+if (tileArg) {
+    const tileIndex = process.argv.indexOf(tileArg);
+    if (tileArg.includes('=')) {
+        selectedTile = tileArg.split('=')[1];
+    } else if (process.argv[tileIndex + 1] && !process.argv[tileIndex + 1].startsWith('-')) {
+        selectedTile = process.argv[tileIndex + 1];
+    }
+}
+
+if (!TILE_LAYERS[selectedTile]) {
+    console.error(`Unknown tile layer: ${selectedTile}`);
+    console.error(`Available tiles: ${Object.keys(TILE_LAYERS).join(', ')}`);
+    process.exit(1);
+}
+
+console.log(`Using tile layer: ${selectedTile}`);
+
 // Function to geocode an address
 async function geocodeAddress(address) {
     const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`;
@@ -185,40 +246,51 @@ function calculateZoom(coords) {
     return 13;
 }
 
-// Calculate total waypoints for proportional timing
-const totalWaypoints = allCoordinates.length;
-const secondsPerWaypoint = 0.08; // Slower speed for better viewing (0.08 = ~12 waypoints per second)
-const calculatedDuration = Math.max(30000, totalWaypoints * secondsPerWaypoint * 1000); // Min 30 seconds
-console.log(`Animation duration: ${calculatedDuration/1000} seconds for ${totalWaypoints} waypoints`);
+// Animation timing (same as animate-frames.js for consistency)
+const TITLE_DURATION = 3;
+const PAN_DURATION = 2.5;
+const ROUTE_DURATION = 25;
+const END_DURATION = 2;
+const totalDuration = TITLE_DURATION + PAN_DURATION + ROUTE_DURATION + END_DURATION;
+
+console.log(`Animation duration: ${totalDuration} seconds`);
 
 // Animation options
 const options = {
     zoom: calculateZoom(allCoordinates),
-    lineColor: destinationsConfig.animation.lineColor,
-    lineWidth: destinationsConfig.animation.lineWidth,
-    animationDuration: calculatedDuration,
+    lineColor: destinationsConfig.animation?.lineColor || '#8B4513',
+    lineWidth: destinationsConfig.animation?.lineWidth || 4,
+    animationDuration: ROUTE_DURATION * 1000,
     useSmoothing: true,
     finalDestination: destinationsConfig.stops[destinationsConfig.stops.length - 1].label,
     title: destinationsConfig.title || 'ADVENTURE',
-    date: destinationsConfig.date || new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+    date: destinationsConfig.date || new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+    // Pass timing info for consistent rendering
+    titleDuration: TITLE_DURATION,
+    panDuration: PAN_DURATION,
+    routeDuration: ROUTE_DURATION,
+    endDuration: END_DURATION,
+    // Tile layer
+    tileLayer: TILE_LAYERS[selectedTile]
 };
 
-async function createMapAnimation() {
+async function previewAnimation() {
+    console.log('\n🎬 PREVIEW MODE - Animation will play in browser window');
+    console.log(`   Total duration: ${totalDuration}s`);
+    console.log('   Close browser window when done, or press Ctrl+C to exit.\n');
+    
     console.log('Launching browser...');
     const browser = await puppeteer.launch({
         headless: false,
-        devtools: true, // Open devtools to see console
         defaultViewport: {
             width: 1280,
             height: 720,
-            deviceScaleFactor: 2  // Higher quality rendering (2x resolution)
+            deviceScaleFactor: 2
         },
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
-            '--disable-web-security',
-            '--disable-gpu-vsync',
-            '--disable-frame-rate-limit'
+            '--disable-web-security'
         ]
     });
     
@@ -280,92 +352,33 @@ async function createMapAnimation() {
         });
     });
     
+    // Inject the icon renderer module
+    console.log('Loading icon renderer module...');
+    await page.evaluate((code) => {
+        eval(code);
+    }, iconRendererCode);
+    
     // Wait for animation function to be ready
     await page.waitForFunction(() => typeof window.animateRoute === 'function', { timeout: 5000 });
     
-    // Calculate total wait time (animation duration + buffer)
-    const animationDuration = options.animationDuration || 30000;
-    const totalWaitTime = animationDuration + 7000; // Animation + title cards + buffer
+    console.log('\n▶️  Starting animation preview...\n');
     
-    // ===== WARM-UP PASS: Run animation first to cache everything =====
-    console.log('\n🔥 WARM-UP PASS: Running animation to cache tiles and resources...');
-    console.log('(This pass is NOT recorded - just warming up the cache)\n');
-    
-    // Run the animation once without recording
+    // Start the animation (single pass - no recording, just preview)
     await page.evaluate(() => window.animateRoute());
     
-    // Wait for the warm-up animation to complete
+    // Wait for animation to complete
+    const totalWaitTime = (totalDuration + 2) * 1000;
     await new Promise(resolve => setTimeout(resolve, totalWaitTime));
-    console.log('✓ Warm-up pass complete! All tiles and resources should be cached.\n');
     
-    // Reset the map for the second pass
-    console.log('Resetting map for recording pass...');
-    await page.evaluate((segments, opts) => {
-        // Reset the animation state
-        window.initMap(segments, opts);
-    }, routeSegments, options);
+    console.log('\n✅ Preview complete!');
+    console.log('   If the animation looks good, run: npm run frames <config.json>');
+    console.log('   Browser window will stay open - close it when done.\n');
     
-    // Give the map a moment to reset
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // ===== RECORDING PASS: Now record the smooth, cached animation =====
-    console.log('🎬 RECORDING PASS: Starting animation with recording...');
-    console.log('(Everything is cached now - should be much smoother!)\n');
-    
-    // Enable page casting with higher quality settings
-    const recorder = await page.screencast({ 
-        path: 'raw-recording.webm',
-        speed: 1,
-        format: 'webm',
-        scale: 1  // Keep full resolution
+    // Keep browser open for inspection - user can close it manually
+    browser.on('disconnected', () => {
+        console.log('Browser closed. Exiting.');
+        process.exit(0);
     });
-    
-    // Small delay to ensure recorder is ready
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    console.log(`Running animation (${animationDuration / 1000}s + 7s for titles)...`);
-    
-    // Start the recorded animation
-    page.evaluate(() => window.animateRoute());
-    
-    // Wait for the animation to complete
-    await new Promise(resolve => setTimeout(resolve, totalWaitTime));
-    console.log('Animation finished!');
-    
-    // Stop recording
-    await recorder.stop();
-    
-    console.log('Recording saved. Converting to MP4...');
-    
-    // Use ffmpeg to create MP4 with better quality
-    const { execSync } = await import('child_process');
-    
-    try {
-        // High quality encoding with proper frame rate
-        console.log('Encoding high-quality MP4...');
-        execSync(`ffmpeg -y -i raw-recording.webm -vf "scale=1280:720:flags=lanczos,fps=30" -c:v libx264 -pix_fmt yuv420p -preset slow -crf 16 -movflags +faststart map-animation.mp4`, {
-            stdio: 'inherit',
-            cwd: __dirname
-        });
-        console.log('MP4 saved as map-animation.mp4');
-        
-        // Clean up raw recording
-        const { unlinkSync } = await import('fs');
-        try {
-            unlinkSync(join(__dirname, 'raw-recording.webm'));
-        } catch (e) {}
-        
-        console.log('\nFor smoother 60fps version, run: npm run smooth');
-        console.log('For old film effect, run: npm run oldfilm');
-        
-    } catch (ffmpegError) {
-        console.error('FFmpeg error:', ffmpegError.message);
-        console.log('Raw recording kept as raw-recording.webm');
-    }
-    
-    console.log('Animation complete!');
-    
-    await browser.close();
 }
 
-createMapAnimation().catch(console.error);
+previewAnimation().catch(console.error);
