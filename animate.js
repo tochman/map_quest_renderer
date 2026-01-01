@@ -109,6 +109,79 @@ if (!startPoint) {
     process.exit(1);
 }
 
+// Function to get hiking route from GraphHopper API
+// GraphHopper's 'hike' profile prefers trails over roads
+async function getHikingRoute(start, end, viaPoints = []) {
+    // Build coordinates array: [start, via1, via2, ..., end]
+    const points = [start, ...viaPoints, end];
+    const pointsParam = points.map(p => `point=${p[0]},${p[1]}`).join('&');
+    
+    // Using free GraphHopper API - limited to 500 requests/day
+    // For production, get your own API key at https://www.graphhopper.com/
+    const url = `https://graphhopper.com/api/1/route?${pointsParam}&profile=hike&points_encoded=false&key=`;
+    
+    // Note: Free tier works without key for testing, but is rate-limited
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.paths && data.paths.length > 0) {
+            // GraphHopper returns [lng, lat], we need [lat, lng]
+            const coords = data.paths[0].points.coordinates.map(c => [c[1], c[0]]);
+            console.log(`Hiking route found with ${coords.length} waypoints`);
+            return coords;
+        } else if (data.message) {
+            console.warn('GraphHopper API:', data.message);
+        }
+    } catch (error) {
+        console.error('Error fetching hiking route:', error);
+    }
+    
+    // Fallback to OSRM foot profile
+    console.log('Falling back to OSRM foot profile...');
+    return getRouteCoordinates(start, end, 'foot', viaPoints);
+}
+
+// Function to query Overpass API for hiking trails near a point
+// Returns trail waypoints that can be used as via points
+async function findNearbyTrails(lat, lon, radiusMeters = 2000) {
+    // Overpass query to find hiking trails within radius
+    // Looking for paths with hiking tags
+    const query = `
+        [out:json];
+        (
+          way(around:${radiusMeters},${lat},${lon})["highway"~"^(path|footway|track)$"];
+          way(around:${radiusMeters},${lat},${lon})["sac_scale"];
+        );
+        out geom;
+    `;
+    
+    const url = 'https://overpass-api.de/api/interpreter';
+    
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            body: query
+        });
+        const data = await response.json();
+        
+        if (data.elements && data.elements.length > 0) {
+            console.log(`Found ${data.elements.length} trails nearby`);
+            // Return sample coordinates from the trails for use as waypoints
+            const trails = data.elements.map(el => ({
+                id: el.id,
+                tags: el.tags,
+                geometry: el.geometry || el.nodes
+            }));
+            return trails;
+        }
+    } catch (error) {
+        console.error('Error querying Overpass API:', error);
+    }
+    
+    return [];
+}
+
 // Function to get route waypoints from OSRM (free routing service)
 // Supports via waypoints to force the route through specific points
 async function getRouteCoordinates(start, end, profile = 'driving', viaPoints = []) {
@@ -181,8 +254,17 @@ for (let i = 0; i < destinationsConfig.stops.length; i++) {
             ]);
         }
         console.log(`Direct route created with ${coords.length} interpolated points`);
+    } else if (stop.travelMode === 'hike') {
+        // Use GraphHopper's hiking profile (prefers trails over roads)
+        const viaPoints = stop.viaPoints || [];
+        if (viaPoints.length > 0) {
+            console.log(`Getting hiking route (${stop.icon}) from "${previousLabel}" to "${stop.label || 'waypoint'}" via ${viaPoints.length} waypoints...`);
+        } else {
+            console.log(`Getting hiking route (${stop.icon}) from "${previousLabel}" to "${stop.label || 'waypoint'}"...`);
+        }
+        coords = await getHikingRoute(currentPoint, nextPoint, viaPoints);
     } else {
-        // Get via points if specified
+        // Use OSRM for driving, feet, etc.
         const viaPoints = stop.viaPoints || [];
         if (viaPoints.length > 0) {
             console.log(`Getting ${stop.travelMode} route (${stop.icon}) from "${previousLabel}" to "${stop.label || 'waypoint'}" via ${viaPoints.length} waypoints...`);
