@@ -13,7 +13,7 @@
       ],
       "label": "BERGUMS KYRKA",
       "travelMode": "driving",
-      "icon": "bike"
+      "icon": "car"
     },
     {
       "coordinates": [
@@ -30,7 +30,7 @@
         12.111491
       ],
       "label": "DESTINATION: GRILLPLATS",
-      "travelMode": "direct",
+      "travelMode": "feet",
       "icon": "backpacker"
     }
   ],

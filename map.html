@@ -111,6 +111,28 @@
             text-align: center;
         }
         
+        #destination-card {
+            position: absolute;
+            bottom: 15%;
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: 'Special Elite', 'Courier New', monospace;
+            color: #3d2817;
+            background: rgba(244, 232, 208, 0.95);
+            padding: 30px 50px;
+            border: 4px solid #8B4513;
+            box-shadow: 5px 5px 20px rgba(0,0,0,0.5);
+            z-index: 2000;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 1s;
+        }
+        #destination-card .destination-text {
+            font-size: 36px;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+        
         /* Location labels */
         .location-label {
             font-family: 'Special Elite', 'Courier New', monospace;
@@ -137,7 +159,7 @@
             z-index: 999;
             filter: drop-shadow(4px 4px 6px rgba(0,0,0,0.7));
             pointer-events: none;
-            background-image: url('bike.png');
+            background-image: url('icons/bike.png');
             background-size: contain;
             background-repeat: no-repeat;
             background-position: center;
@@ -153,7 +175,7 @@
             z-index: 999;
             filter: drop-shadow(4px 4px 6px rgba(0,0,0,0.7));
             pointer-events: none;
-            background-image: url('person.png');
+            background-image: url('icons/person.png');
             background-size: contain;
             background-repeat: no-repeat;
             background-position: center;
@@ -169,7 +191,7 @@
             z-index: 999;
             filter: drop-shadow(4px 4px 6px rgba(0,0,0,0.7));
             pointer-events: none;
-            background-image: url('car.png');
+            background-image: url('icons/car.png');
             background-size: contain;
             background-repeat: no-repeat;
             background-position: center;
@@ -177,7 +199,7 @@
             transition: opacity 0.5s ease;
         }
         
-        /* Backpacker icon - mirrored to face left (same direction as bike) */
+        /* Backpacker icon */
         #backpacker {
             width: 35px;
             height: 35px;
@@ -185,13 +207,12 @@
             z-index: 999;
             filter: drop-shadow(4px 4px 6px rgba(0,0,0,0.7));
             pointer-events: none;
-            background-image: url('backpack.png');
+            background-image: url('icons/backpack.png');
             background-size: contain;
             background-repeat: no-repeat;
             background-position: center;
             opacity: 0;
             transition: opacity 0.5s ease;
-            transform: scaleX(-1); /* Mirror to face left */
         }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Special+Elite&display=swap" rel="stylesheet">
@@ -200,6 +221,7 @@
     <div id="map"></div>
     <div id="parchment-overlay"></div>
     <div id="title-card"></div>
+    <div id="destination-card"><div class="destination-text"></div></div>
     <div id="compass">
         <svg viewBox="0 0 200 200">
             <!-- Decorative outer circles -->
