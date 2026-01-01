@@ -3,11 +3,11 @@
  * 
  * Handles rendering logic for all vehicle/character icons in the map animation.
  * 
- * VERIFIED ICON ORIENTATIONS (from test-icons.html):
- * - car.png at rotate(0deg): faces LEFT
- * - bike.png at rotate(0deg): faces LEFT
- * - person.png at rotate(0deg): stands UPRIGHT
- * - backpack.png at rotate(0deg): stands UPRIGHT
+ * VERIFIED ICON ORIENTATIONS at rotate(0deg):
+ * - car.png: faces RIGHT →
+ * - bike.png: faces RIGHT →
+ * - person.png: stands UPRIGHT (flip horizontally based on direction)
+ * - backpack.png: stands UPRIGHT (flip horizontally based on direction)
  * 
  * IMPORTANT: Person and backpack should NEVER rotate - they stay upright
  * and only flip horizontally based on travel direction.
@@ -15,12 +15,12 @@
 
 const ICON_CONFIG = {
     bike: {
-        defaultFacing: 'left',  // At CSS rotate(0), icon faces left
+        defaultFacing: 'right',  // At CSS rotate(0), icon faces right
         rotates: true,
         size: 60
     },
     car: {
-        defaultFacing: 'left',  // At CSS rotate(0), icon faces left
+        defaultFacing: 'right',  // At CSS rotate(0), icon faces right
         rotates: true,
         size: 60
     },
@@ -40,8 +40,9 @@ const ICON_CONFIG = {
  * Calculate the transform for an icon based on direction of travel.
  * 
  * For ROTATING icons (car, bike):
- *   - Rotate to point in direction of travel
- *   - Left-facing icons: CSS = 180 - directionAngle
+ *   - Rotate DYNAMICALLY to follow immediate road angle
+ *   - Use short lookahead for responsive tilting
+ *   - Smooth interpolation to avoid jitter
  * 
  * For NON-ROTATING icons (person, backpacker):
  *   - Stay upright (no rotation)
@@ -59,32 +60,37 @@ function calculateIconTransform(iconType, dx, dy, lastAngle, interpolationFactor
     
     if (config.rotates) {
         // ROTATING ICONS (bike, car)
-        // These icons rotate to follow the direction of travel
+        // These icons rotate DYNAMICALLY to follow the road
         
-        // Car and bike face LEFT at rotate(0deg)
+        // Car and bike face RIGHT at rotate(0deg)
         // To make them point in travel direction:
-        // - Travel EAST (0°): need rotate(180deg) to flip them to face right
+        // - Travel EAST (0°): need rotate(0deg) - already facing right
         // - Travel SOUTH (90°): need rotate(90deg) 
-        // - Travel WEST (180°): need rotate(0deg) - already facing left
+        // - Travel WEST (180°): need rotate(180deg)
         // - Travel NORTH (-90°): need rotate(-90deg)
-        // Formula: CSS_rotation = 180 - directionAngle
-        targetAngle = 180 - directionAngle;
+        // Formula: CSS_rotation = directionAngle
+        targetAngle = directionAngle;
         
         // Normalize to -180 to 180 range
         while (targetAngle > 180) targetAngle -= 360;
         while (targetAngle < -180) targetAngle += 360;
         
-        // Smooth interpolation for rotation
+        // Smooth interpolation for rotation - responsive but smooth
         let angleDiff = targetAngle - lastAngle;
         // Handle wrap-around
         while (angleDiff > 180) angleDiff -= 360;
         while (angleDiff < -180) angleDiff += 360;
         
-        if (Math.abs(angleDiff) > 1) {
+        // Only update if change is significant enough
+        if (Math.abs(angleDiff) > 0.5) {
             targetAngle = lastAngle + angleDiff * interpolationFactor;
         } else {
             targetAngle = lastAngle; // Keep last angle if change is tiny
         }
+        
+        // Normalize to prevent drift
+        while (targetAngle > 180) targetAngle -= 360;
+        while (targetAngle < -180) targetAngle += 360;
         
     } else {
         // NON-ROTATING ICONS (person, backpacker)

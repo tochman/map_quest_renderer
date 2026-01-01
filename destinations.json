@@ -13,7 +13,8 @@
       ],
       "label": "BERGUMS KYRKA",
       "travelMode": "driving",
-      "icon": "car"
+      "icon": "car",
+      "zoomLevel": 13
     },
     {
       "coordinates": [
@@ -22,7 +23,8 @@
       ],
       "label": "MOLLSJÖVÄGEN PARKING",
       "travelMode": "driving",
-      "icon": "bike"
+      "icon": "bike",
+      "zoomLevel": 13
     },
     {
       "coordinates": [
@@ -31,7 +33,8 @@
       ],
       "label": "DESTINATION: GRILLPLATS",
       "travelMode": "hike",
-      "icon": "backpacker"
+      "icon": "backpacker",
+      "zoomLevel": 14
     }, {
       "coordinates": [
         57.8363166667,
@@ -39,7 +42,8 @@
       ],
       "label": "Target: VARGGROPEN",
       "travelMode": "hike",
-      "icon": "backpacker"
+      "icon": "backpacker",
+      "zoomLevel": 15
     }
   ],
   "animation": {

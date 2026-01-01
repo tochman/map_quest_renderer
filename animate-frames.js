@@ -209,7 +209,8 @@ for (let i = 0; i < destinationsConfig.stops.length; i++) {
         fromLabel: previousLabel,
         toLabel: stop.label,
         travelMode: stop.travelMode,
-        showMarker: stop.label !== null
+        showMarker: stop.label !== null,
+        zoomLevel: stop.zoomLevel || null  // null means auto-calculate
     });
     
     currentPoint = nextPoint;

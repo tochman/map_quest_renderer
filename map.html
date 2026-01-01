@@ -353,12 +353,13 @@
                 useSmoothing,
                 finalDestination,
                 title,
-                date
+                date,
+                maxZoom: tileLayer?.options?.maxZoom || 18
             };
         }
         
         async function animateRoute() {
-            const { routeSegments, lineColor, lineWidth, animationDuration, useSmoothing, finalDestination, title, date } = window.mapData;
+            const { routeSegments, lineColor, lineWidth, animationDuration, useSmoothing, finalDestination, title, date, maxZoom } = window.mapData;
             
             // Flatten all coordinates
             const allCoordinates = routeSegments.flatMap(seg => seg.coordinates);
@@ -408,8 +409,28 @@
             
             await new Promise(resolve => setTimeout(resolve, 1000));
             
-            // Then smoothly pan and zoom to starting point
-            map.flyTo(startCoord, 14, { duration: 2 });
+            // Calculate zoom levels BEFORE flyTo so we can use the correct starting zoom
+            const bounds = L.latLngBounds(allCoordinates);
+            const overviewZoom = map.getBoundsZoom(bounds, false, [80, 80]);
+            const defaultCloseZoom = Math.min(14, maxZoom);
+            
+            // Build array of zoom levels for each segment
+            const segmentZoomLevels = routeSegments.map((seg, idx) => {
+                let zoom;
+                if (seg.zoomLevel !== null && seg.zoomLevel !== undefined) {
+                    zoom = seg.zoomLevel;
+                } else {
+                    const segBounds = L.latLngBounds(seg.coordinates);
+                    const autoZoom = map.getBoundsZoom(segBounds, false, [100, 100]);
+                    zoom = Math.max(autoZoom, overviewZoom);
+                }
+                return Math.min(zoom, maxZoom);
+            });
+            
+            const startZoom = segmentZoomLevels[0] || defaultCloseZoom;
+            
+            // Then smoothly pan and zoom to starting point using the CORRECT zoom level
+            map.flyTo(startCoord, startZoom, { duration: 2 });
             
             await new Promise(resolve => setTimeout(resolve, 2500));
             
@@ -447,20 +468,19 @@
             motorcycle.style.opacity = '1'; // Show motorcycle initially
             
             // STAGE 3: Animate route WITH simultaneous zoom
-            // Calculate zoom levels for smooth transition
-            const bounds = L.latLngBounds(allCoordinates);
-            const startZoom = 13;  // Start closer
-            const midZoom = map.getBoundsZoom(bounds, false, [80, 80]);
-            const endZoom = 14;    // End close up
+            // (segmentZoomLevels already calculated above before flyTo)
+            const endZoom = segmentZoomLevels[segmentZoomLevels.length - 1] || defaultCloseZoom;
 
             const startTime = performance.now();
             let animatedLine = null;
             let lastAngle = 0;
             
-            // Smooth camera state for cinematic tracking
-            let cameraLat = allCoordinates[0][0];
-            let cameraLng = allCoordinates[0][1];
-            let cameraZoom = startZoom;
+            // Initialize camera state from ACTUAL current map position/zoom
+            // This ensures no jump at animation start
+            const currentMapCenter = map.getCenter();
+            let cameraLat = currentMapCenter.lat;
+            let cameraLng = currentMapCenter.lng;
+            let cameraZoom = map.getZoom();  // Use actual map zoom, not calculated
             
             // Pre-create all waypoint markers and labels (hidden) for fade-in effect
             const waypointMarkers = [];
@@ -517,6 +537,28 @@
                 segmentProgressThresholds.push(cumulativeProgress);
             }
             
+            // Build zoom keyframes based on OVERALL progress (not per-segment)
+            // Create keyframes that transition BETWEEN segments for smooth zoom
+            // Each segment's zoom level applies at its MIDPOINT, with smooth transitions before/after
+            const zoomKeyframes = [];
+            
+            // Start: begin at first segment's zoom
+            zoomKeyframes.push({ progress: 0, zoom: segmentZoomLevels[0] });
+            
+            // For each segment, the zoom reaches its target at the segment's midpoint
+            let prevThreshold = 0;
+            for (let i = 0; i < segmentProgressThresholds.length; i++) {
+                const segmentMidpoint = (prevThreshold + segmentProgressThresholds[i]) / 2;
+                zoomKeyframes.push({ 
+                    progress: segmentMidpoint, 
+                    zoom: segmentZoomLevels[i]
+                });
+                prevThreshold = segmentProgressThresholds[i];
+            }
+            
+            // End: finish at last segment's zoom
+            zoomKeyframes.push({ progress: 1, zoom: segmentZoomLevels[segmentZoomLevels.length - 1] });
+            
             // Wrap animation in a Promise
             await new Promise((animationResolve) => {
                 function drawFrame(currentTime) {
@@ -540,18 +582,30 @@
                     const segmentProgress = segmentDuration > 0 ? Math.min((progress - segmentStartProgress) / segmentDuration, 1) : 1;
                     
                     // Fade in waypoint labels when 1/3 of distance away
+                    // Fade out waypoint labels after we've left that segment
                     for (let i = 0; i < waypointMarkers.length; i++) {
-                        if (!waypointShown[i]) {
-                            // Calculate when to show this waypoint (when we're 1/3 into its segment)
-                            const showThreshold = i === 0 
-                                ? segmentProgressThresholds[0] * 0.33 
-                                : segmentProgressThresholds[i] - (segmentProgressThresholds[i] - (segmentProgressThresholds[i-1] || 0)) * 0.67;
-                            
-                            if (progress >= showThreshold) {
+                        // Calculate when to show this waypoint (when we're 1/3 into its segment)
+                        const showThreshold = i === 0 
+                            ? segmentProgressThresholds[0] * 0.33 
+                            : segmentProgressThresholds[i] - (segmentProgressThresholds[i] - (segmentProgressThresholds[i-1] || 0)) * 0.67;
+                        
+                        // Calculate when to hide this waypoint (when we're 1/3 into the NEXT segment)
+                        const hideThreshold = i < segmentProgressThresholds.length - 1
+                            ? segmentProgressThresholds[i] + (segmentProgressThresholds[i + 1] - segmentProgressThresholds[i]) * 0.33
+                            : 2; // Never hide the last waypoint before destination
+                        
+                        if (progress >= showThreshold && progress < hideThreshold) {
+                            // Show the waypoint
+                            if (!waypointShown[i]) {
                                 waypointMarkers[i].setStyle({ fillOpacity: 0.9 });
                                 waypointLabels[i].setOpacity(1);
                                 waypointShown[i] = true;
                             }
+                        } else if (progress >= hideThreshold && waypointShown[i]) {
+                            // Fade out the waypoint
+                            waypointMarkers[i].setStyle({ fillOpacity: 0 });
+                            waypointLabels[i].setOpacity(0);
+                            waypointShown[i] = false;
                         }
                     }
                     
@@ -593,9 +647,23 @@
                     // Use linear speed for consistent movement (no acceleration/deceleration)
                     const eased = segmentProgress;
                     
-                    // === CINEMATIC ZOOM ===
-                    const zoomCurve = Math.sin(progress * Math.PI);
-                    const targetZoom = startZoom - (startZoom - midZoom) * zoomCurve;
+                    // === SMOOTH ZOOM using keyframes based on overall progress ===
+                    // Find the two keyframes we're between
+                    let prevKeyframe = zoomKeyframes[0];
+                    let nextKeyframe = zoomKeyframes[zoomKeyframes.length - 1];
+                    for (let i = 0; i < zoomKeyframes.length - 1; i++) {
+                        if (progress >= zoomKeyframes[i].progress && progress < zoomKeyframes[i + 1].progress) {
+                            prevKeyframe = zoomKeyframes[i];
+                            nextKeyframe = zoomKeyframes[i + 1];
+                            break;
+                        }
+                    }
+                    
+                    // Interpolate between keyframes using smoothstep
+                    const keyframeRange = nextKeyframe.progress - prevKeyframe.progress;
+                    const keyframeT = keyframeRange > 0 ? (progress - prevKeyframe.progress) / keyframeRange : 0;
+                    const smoothT = keyframeT * keyframeT * (3 - 2 * keyframeT); // smoothstep
+                    const targetZoom = prevKeyframe.zoom + (nextKeyframe.zoom - prevKeyframe.zoom) * smoothT;
                     
                     // Calculate vehicle position within segment
                     const totalPoints = coordinates.length - 1;
@@ -620,23 +688,30 @@
                     }
                     
                     // === CINEMATIC CAMERA: Look ahead of vehicle ===
-                    const lookAheadDistance = Math.min(30, coordinates.length - safeIndex - 1);
+                    const lookAheadDistance = Math.min(40, coordinates.length - safeIndex - 1);
                     const lookAheadIndex = Math.min(safeIndex + lookAheadDistance, coordinates.length - 1);
                     const lookAheadPos = coordinates[lookAheadIndex];
                     
                     // Blend between vehicle position and look-ahead (more ahead when zoomed out)
-                    const lookAheadBlend = 0.3 * zoomCurve;
+                    // Calculate how "zoomed out" we are relative to a close-up view
+                    const zoomOutFactor = Math.max(0, (16 - targetZoom) / 6); // 0 at zoom 16, 1 at zoom 10
+                    const lookAheadBlend = 0.25 * zoomOutFactor;
                     const targetLat = vehiclePos[0] + (lookAheadPos[0] - vehiclePos[0]) * lookAheadBlend;
                     const targetLng = vehiclePos[1] + (lookAheadPos[1] - vehiclePos[1]) * lookAheadBlend;
                     
-                    // Smooth camera POSITION tracking (but zoom is direct)
-                    const positionSmoothing = 0.12;
+                    // Smooth camera POSITION tracking (lower = smoother but more lag)
+                    const positionSmoothing = 0.08;
                     
                     cameraLat += (targetLat - cameraLat) * positionSmoothing;
                     cameraLng += (targetLng - cameraLng) * positionSmoothing;
                     
-                    // Set camera - smooth position, direct zoom
-                    map.setView([cameraLat, cameraLng], targetZoom, { animate: false });
+                    // Smooth zoom tracking - very low value for gradual, cinematic zoom changes
+                    // Combined with keyframe interpolation, this creates buttery smooth zoom
+                    const zoomSmoothing = 0.03;
+                    cameraZoom += (targetZoom - cameraZoom) * zoomSmoothing;
+                    
+                    // Set camera - smooth position and smooth zoom
+                    map.setView([cameraLat, cameraLng], cameraZoom, { animate: false });
                     
                     // Get visible coordinates for line drawing
                     const visibleCoords = coordinates.slice(0, safeIndex + 1);
@@ -691,84 +766,73 @@
                         // =====================================================
                         // ICON ORIENTATION LOGIC
                         // =====================================================
-                        // Icon default orientations (VERIFIED):
-                        //   - car.png: faces LEFT ← (hood on left)
-                        //   - bike.png: faces LEFT ← (handlebars on left)
-                        //   - backpack.png: faces LEFT ← 
-                        //   - person.png: faces RIGHT →
+                        // Icon default orientations at rotate(0deg):
+                        //   - car.png: faces RIGHT → (hood on right)
+                        //   - bike.png: faces RIGHT → (handlebars on right)
+                        //   - backpack.png: stands upright (flip horizontally)
+                        //   - person.png: stands upright (flip horizontally)
                         // =====================================================
                         
-                        // Look FAR ahead on the route for stable direction (50+ points)
-                        const lookAhead = Math.min(coordinates.length - 1, safeIndex + 60);
-                        const fromPos = coordinates[safeIndex];
-                        const toPos = coordinates[lookAhead];
+                        // Use MEDIUM lookahead for stable but responsive tilt
+                        // Too short = jittery, too long = doesn't follow curves
+                        const tiltLookAhead = Math.min(coordinates.length - 1, safeIndex + 25);
+                        const tiltFromPos = coordinates[safeIndex];
+                        const tiltToPos = coordinates[tiltLookAhead];
                         
-                        // Convert to screen coordinates
-                        const fromPoint = map.latLngToContainerPoint(fromPos);
-                        const toPoint = map.latLngToContainerPoint(toPos);
+                        // Convert to screen coordinates for tilt
+                        const tiltFromPoint = map.latLngToContainerPoint(tiltFromPos);
+                        const tiltToPoint = map.latLngToContainerPoint(tiltToPos);
                         
                         // Calculate direction vector
-                        const dx = toPoint.x - fromPoint.x;  // positive = moving right
-                        const dy = toPoint.y - fromPoint.y;  // positive = moving down
+                        const dx = tiltToPoint.x - tiltFromPoint.x;  // positive = moving right
+                        const dy = tiltToPoint.y - tiltFromPoint.y;  // positive = moving down
                         
                         // atan2 gives: 0°=right, 90°=down, ±180°=left, -90°=up
-                        const direction = Math.atan2(dy, dx) * 180 / Math.PI;
+                        const dynamicAngle = Math.atan2(dy, dx) * 180 / Math.PI;
                         
-                        if (currentIconType === 'car') {
-                            // CAR is SIDE VIEW facing RIGHT
-                            // Flip when going left, tilt follows road angle dynamically
-                            const goingLeft = Math.abs(direction) > 90;
-                            const scaleX = goingLeft ? -1 : 1;
+                        if (currentIconType === 'car' || currentIconType === 'bike') {
+                            // CAR and BIKE face RIGHT at rotate(0deg)
+                            // Use angle for road-following tilt
+                            // - Travel EAST (0°): need 0° - already facing right
+                            // - Travel SOUTH (90°): need 90° rotation
+                            // - Travel WEST (180°): need 180° rotation
+                            // - Travel NORTH (-90°): need -90° rotation
                             
-                            // Tilt = road angle relative to horizontal
-                            // When going right: tilt directly from direction
-                            // When going left: adjust for the flip
-                            let tilt;
-                            if (goingLeft) {
-                                tilt = direction > 0 ? -(direction - 180) : -(direction + 180);
-                            } else {
-                                tilt = direction;
-                            }
+                            let targetAngle = dynamicAngle;
                             
-                            // Smooth interpolation
-                            let angleDiff = tilt - lastAngle;
+                            // Normalize to -180 to 180 range
+                            while (targetAngle > 180) targetAngle -= 360;
+                            while (targetAngle < -180) targetAngle += 360;
+                            
+                            // Very smooth interpolation to prevent flickering
+                            // Lower value = smoother but more lag
+                            const smoothingFactor = 0.06;
+                            let angleDiff = targetAngle - lastAngle;
+                            
+                            // Handle wrap-around at ±180°
                             while (angleDiff > 180) angleDiff -= 360;
                             while (angleDiff < -180) angleDiff += 360;
-                            if (Math.abs(angleDiff) > 2) {
-                                lastAngle = lastAngle + angleDiff * 0.1;
+                            
+                            // Only update if change is significant (ignore tiny fluctuations)
+                            if (Math.abs(angleDiff) > 1) {
+                                lastAngle = lastAngle + angleDiff * smoothingFactor;
                             }
                             
-                            currentIcon.style.transform = `scaleX(${scaleX}) rotate(${lastAngle}deg)`;
-                            currentIcon.style.transformOrigin = 'center center';
+                            // Normalize lastAngle to prevent drift
+                            while (lastAngle > 180) lastAngle -= 360;
+                            while (lastAngle < -180) lastAngle += 360;
                             
-                        } else if (currentIconType === 'bike') {
-                            // BIKE is SIDE VIEW facing LEFT  
-                            // Flip when going right, tilt follows road angle dynamically
-                            const goingRight = Math.abs(direction) <= 90;
-                            const scaleX = goingRight ? -1 : 1;
-                            
-                            // Tilt = road angle relative to horizontal
-                            let tilt;
-                            if (goingRight) {
-                                tilt = -direction;  // Negate because bike faces opposite
-                            } else {
-                                tilt = direction > 0 ? direction - 180 : direction + 180;
-                            }
-                            
-                            // Smooth interpolation
-                            let angleDiff = tilt - lastAngle;
-                            while (angleDiff > 180) angleDiff -= 360;
-                            while (angleDiff < -180) angleDiff += 360;
-                            if (Math.abs(angleDiff) > 2) {
-                                lastAngle = lastAngle + angleDiff * 0.1;
-                            }
-                            
-                            currentIcon.style.transform = `scaleX(${scaleX}) rotate(${lastAngle}deg)`;
+                            currentIcon.style.transform = `rotate(${lastAngle}deg)`;
                             currentIcon.style.transformOrigin = 'center center';
                             
                         } else {
                             // PERSON and BACKPACKER - stay upright, flip horizontally
-                            const travelingLeft = dx < 0;
+                            // Use longer lookahead for flip direction (more stable)
+                            const flipLookAhead = Math.min(coordinates.length - 1, safeIndex + 30);
+                            const flipToPos = coordinates[flipLookAhead];
+                            const flipToPoint = map.latLngToContainerPoint(flipToPos);
+                            const flipDx = flipToPoint.x - tiltFromPoint.x;
+                            const travelingLeft = flipDx < 0;
                             
                             if (currentIconType === 'backpacker') {
                                 // Backpacker faces LEFT by default, flip when going RIGHT

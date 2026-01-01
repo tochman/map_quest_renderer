@@ -1,5 +1,5 @@
 {
-  "title": "Road Trip to Campino",
+  "title": "Hike till Kvarnruinen",
   "date": "June 2024",
   "start": {
     "address": "Stannums Byväg 20, Lerum, Sweden",
@@ -13,7 +13,8 @@
       ],
       "label": "Gulf Gråbo",
       "travelMode": "driving",
-      "icon": "car"
+      "icon": "car",
+      "zoomLevel": 13
     },
     {
       "coordinates": [
@@ -22,7 +23,8 @@
       ],
       "label": "Ljungslätt - Parkering",
       "travelMode": "driving",
-      "icon": "car"
+      "icon": "car",
+      "zoomLevel": 13
     },
     {
       "coordinates": [
@@ -30,8 +32,9 @@
         12.282847
       ],
       "label": "Ljungslätt - Scoutstugan",
-      "travelMode": "feet",
-      "icon": "backpacker"
+      "travelMode": "hike",
+      "icon": "backpacker",
+      "zoomLevel": 14
     },
     {
       "coordinates": [
@@ -39,8 +42,9 @@
         12.25694
       ],
       "label": "Kvarnruinen",
-      "travelMode": "feet",
-      "icon": "backpacker"
+      "travelMode": "hike",
+      "icon": "backpacker",
+      "zoomLevel": 14
     }
   ],
   "animation": {

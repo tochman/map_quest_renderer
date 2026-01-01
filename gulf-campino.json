@@ -10,13 +10,15 @@
       "coordinates": [57.841426, 12.285938],
       "label": "Gulf Gråbo",
       "travelMode": "driving",
-      "icon": "car"
+      "icon": "car",
+      "zoomLevel": 14
     },
     {
       "coordinates": [57.8402793, 12.2975673],
       "label": "Campino Pizzeria",
       "travelMode": "feet",
-      "icon": "backpacker"
+      "icon": "backpacker",
+      "zoomLevel": 16
     }
   ],
   "animation": {

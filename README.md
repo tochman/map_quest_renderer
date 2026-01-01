@@ -19,10 +19,10 @@ Preview your animation in a browser window before rendering:
 npm run preview
 
 # Preview with custom JSON file
-npm run preview stannum-ljungslätt.json
+npm run preview -- stannum-ljungslätt.json
 
 # Preview with different tile style
-npm run preview stannum-ljungslätt.json --tile watercolor
+npm run preview -- stannum-ljungslätt.json --tile watercolor
 ```
 
 The browser stays open after playback so you can inspect the result.
@@ -36,10 +36,10 @@ When happy with the preview, render to MP4:
 npm run render
 
 # Render with custom JSON file
-npm run render gulf-campino.json
+npm run render -- gulf-campino.json
 
 # Render with different tile style
-npm run render gulf-campino.json --tile watercolor
+npm run render -- gulf-campino.json --tile watercolor
 ```
 
 This creates a `map-animation.mp4` video file using frame-by-frame capture for guaranteed smooth playback.
@@ -58,21 +58,23 @@ npm run oldfilm
 
 Choose different map styles with the `--tile` flag:
 
-| Name | Description |
-|------|-------------|
-| `osm` | OpenStreetMap (default) |
-| `watercolor` | Stamen Watercolor - artistic, painterly style |
-| `terrain` | OpenTopoMap - topographic with elevation |
-| `toner` | CartoDB Positron - light, clean, minimal |
-| `dark` | CartoDB Dark Matter - dark mode style |
-| `voyager` | CartoDB Voyager - colorful, modern |
-| `humanitarian` | Humanitarian OSM - clear, high contrast |
+| Name | Description | Max Zoom |
+|------|-------------|----------|
+| `osm` | OpenStreetMap (default) | 19 |
+| `watercolor` | Stamen Watercolor - artistic, painterly style | 16 |
+| `terrain` | OpenTopoMap - topographic with elevation | 17 |
+| `toner` | CartoDB Positron - light, clean, minimal | 20 |
+| `dark` | CartoDB Dark Matter - dark mode style | 20 |
+| `voyager` | CartoDB Voyager - colorful, modern | 20 |
+| `humanitarian` | Humanitarian OSM - clear, high contrast | 19 |
+
+**Note:** Zoom levels in your JSON config will be automatically clamped to the tile layer's maximum zoom to avoid missing tiles (404 errors).
 
 **Examples:**
 ```bash
-npm run preview trip.json --tile watercolor
-npm run render trip.json --tile terrain
-npm run preview trip.json --tile=dark
+npm run preview -- trip.json --tile watercolor
+npm run render -- trip.json --tile terrain
+npm run preview -- trip.json --tile=dark
 ```
 
 ## Configuration
@@ -125,11 +127,23 @@ All route and animation settings are configured in a JSON file:
 | `stops[].coordinates` | `[latitude, longitude]` of each waypoint |
 | `stops[].address` | Alternative to coordinates - will be geocoded |
 | `stops[].label` | Label for the waypoint (use `null` for unlabeled waypoints) |
-| `stops[].travelMode` | `"driving"`, `"cycling"`, `"walking"`, or `"direct"` |
+| `stops[].travelMode` | `"driving"`, `"cycling"`, `"walking"`, `"hike"`, or `"direct"` |
 | `stops[].icon` | `"bike"`, `"person"`, `"car"`, or `"backpacker"` |
 | `stops[].viaPoints` | Optional `[[lat, lng], ...]` to force route through specific points |
+| `stops[].zoomLevel` | Zoom level for this segment (10-18). Omit for auto-calculation |
 | `animation.lineColor` | Route line color (hex) |
 | `animation.lineWidth` | Route line thickness in pixels |
+
+### Zoom Levels
+
+Each stop can have a custom `zoomLevel` (10-18) that controls how close the camera zooms during that segment:
+- **10-11**: Very far - good for long driving segments across cities
+- **12-13**: Medium distance - typical for driving between neighborhoods  
+- **14-15**: Close up - good for walking/hiking segments
+- **16-18**: Very close - detailed view for short walks
+
+If `zoomLevel` is omitted, it will be auto-calculated based on the segment's geographic size.
+The camera smoothly interpolates between zoom levels as it moves from one segment to the next.
 
 ### Travel Modes
 
