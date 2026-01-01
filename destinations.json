@@ -3,7 +3,8 @@
   "date": "December 31, 2025",
   "start": {
     "address": "Stannums Byväg 20, Lerum, Sweden",
-    "label": "START: STANNUM"
+    "label": "START: STANNUM",
+    "zoomLevel": 13
   },
   "stops": [
     {

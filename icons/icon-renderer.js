@@ -4,10 +4,10 @@
  * Handles rendering logic for all vehicle/character icons in the map animation.
  * 
  * VERIFIED ICON ORIENTATIONS at rotate(0deg):
- * - car.png: faces RIGHT →
- * - bike.png: faces RIGHT →
- * - person.png: stands UPRIGHT (flip horizontally based on direction)
- * - backpack.png: stands UPRIGHT (flip horizontally based on direction)
+ * - car.png: faces RIGHT → (hood on right)
+ * - bike.png: faces LEFT ← (handlebars on left)
+ * - person.png: stands UPRIGHT, faces RIGHT →
+ * - backpack.png: stands UPRIGHT, faces LEFT ←
  * 
  * IMPORTANT: Person and backpack should NEVER rotate - they stay upright
  * and only flip horizontally based on travel direction.
@@ -15,23 +15,23 @@
 
 const ICON_CONFIG = {
     bike: {
-        defaultFacing: 'right',  // At CSS rotate(0), icon faces right
+        defaultFacing: 'left',
         rotates: true,
         size: 60
     },
     car: {
-        defaultFacing: 'right',  // At CSS rotate(0), icon faces right
+        defaultFacing: 'right',
         rotates: true,
         size: 60
     },
     person: {
         defaultFacing: 'right',
-        rotates: false,  // NEVER rotate - stay upright
+        rotates: false,
         size: 40
     },
     backpacker: {
-        defaultFacing: 'right',
-        rotates: false,  // NEVER rotate - stay upright
+        defaultFacing: 'left',
+        rotates: false,
         size: 35
     }
 };
@@ -60,35 +60,25 @@ function calculateIconTransform(iconType, dx, dy, lastAngle, interpolationFactor
     
     if (config.rotates) {
         // ROTATING ICONS (bike, car)
-        // These icons rotate DYNAMICALLY to follow the road
-        
-        // Car and bike face RIGHT at rotate(0deg)
-        // To make them point in travel direction:
-        // - Travel EAST (0°): need rotate(0deg) - already facing right
-        // - Travel SOUTH (90°): need rotate(90deg) 
-        // - Travel WEST (180°): need rotate(180deg)
-        // - Travel NORTH (-90°): need rotate(-90deg)
-        // Formula: CSS_rotation = directionAngle
-        targetAngle = directionAngle;
+        // Car and bike face LEFT at rotate(0deg)
+        // Formula: CSS_rotation = 180 - directionAngle
+        targetAngle = 180 - directionAngle;
         
         // Normalize to -180 to 180 range
         while (targetAngle > 180) targetAngle -= 360;
         while (targetAngle < -180) targetAngle += 360;
         
-        // Smooth interpolation for rotation - responsive but smooth
+        // Smooth interpolation for rotation
         let angleDiff = targetAngle - lastAngle;
-        // Handle wrap-around
         while (angleDiff > 180) angleDiff -= 360;
         while (angleDiff < -180) angleDiff += 360;
         
-        // Only update if change is significant enough
         if (Math.abs(angleDiff) > 0.5) {
             targetAngle = lastAngle + angleDiff * interpolationFactor;
         } else {
-            targetAngle = lastAngle; // Keep last angle if change is tiny
+            targetAngle = lastAngle;
         }
         
-        // Normalize to prevent drift
         while (targetAngle > 180) targetAngle -= 360;
         while (targetAngle < -180) targetAngle += 360;
         
@@ -139,10 +129,18 @@ function getIconConfig(iconType) {
     return ICON_CONFIG[iconType] || ICON_CONFIG.person;
 }
 
+/**
+ * Get the size for an icon type
+ */
+function getIconSize(iconType) {
+    const config = ICON_CONFIG[iconType] || ICON_CONFIG.person;
+    return config.size;
+}
+
 // Export for use in browser and Node.js
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { calculateIconTransform, getIconTransformCSS, getIconConfig, ICON_CONFIG };
+    module.exports = { calculateIconTransform, getIconTransformCSS, getIconConfig, getIconSize, ICON_CONFIG };
 }
 if (typeof window !== 'undefined') {
-    window.IconRenderer = { calculateIconTransform, getIconTransformCSS, getIconConfig, ICON_CONFIG };
+    window.IconRenderer = { calculateIconTransform, getIconTransformCSS, getIconConfig, getIconSize, ICON_CONFIG };
 }

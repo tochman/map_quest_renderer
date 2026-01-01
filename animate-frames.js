@@ -30,37 +30,47 @@ const destinationsConfig = JSON.parse(await readFile(destinationsPath, 'utf-8'))
 // Tile layer configurations (all free, no API key required)
 const TILE_LAYERS = {
     osm: {
-        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
         options: { maxZoom: 19, attribution: '© OpenStreetMap contributors' }
     },
     watercolor: {
-        // Stamen Watercolor hosted on archive.org (no API key needed)
+        // Stamen Watercolor hosted by Smithsonian
         url: 'https://watercolormaps.collection.cooperhewitt.org/tile/watercolor/{z}/{x}/{y}.jpg',
-        options: { minZoom: 1, maxZoom: 16, attribution: '© Stamen Design © OpenStreetMap' }
+        options: { minZoom: 1, maxZoom: 15, attribution: '© Stamen Design © OpenStreetMap' }
     },
     terrain: {
         // OpenTopoMap - free terrain tiles
-        url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+        url: 'https://tile.opentopomap.org/{z}/{x}/{y}.png',
         options: { maxZoom: 17, attribution: '© OpenTopoMap © OpenStreetMap' }
     },
+    // CartoDB tiles - with labels
     toner: {
-        // CartoDB Positron (light, clean style - similar to toner)
-        url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
-        options: { maxZoom: 20, attribution: '© CartoDB © OpenStreetMap' }
+        url: 'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+        options: { maxZoom: 20, attribution: '© CARTO © OpenStreetMap' }
     },
     dark: {
-        // CartoDB Dark Matter
-        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-        options: { maxZoom: 20, attribution: '© CartoDB © OpenStreetMap' }
+        url: 'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+        options: { maxZoom: 20, attribution: '© CARTO © OpenStreetMap' }
     },
     voyager: {
-        // CartoDB Voyager (colorful, modern)
-        url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
-        options: { maxZoom: 20, attribution: '© CartoDB © OpenStreetMap' }
+        url: 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+        options: { maxZoom: 20, attribution: '© CARTO © OpenStreetMap' }
+    },
+    // CartoDB tiles - NO labels (cleaner look)
+    'toner-nolabels': {
+        url: 'https://a.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png',
+        options: { maxZoom: 20, attribution: '© CARTO © OpenStreetMap' }
+    },
+    'dark-nolabels': {
+        url: 'https://a.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png',
+        options: { maxZoom: 20, attribution: '© CARTO © OpenStreetMap' }
+    },
+    'voyager-nolabels': {
+        url: 'https://a.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png',
+        options: { maxZoom: 20, attribution: '© CARTO © OpenStreetMap' }
     },
     humanitarian: {
-        // Humanitarian OpenStreetMap
-        url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+        url: 'https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
         options: { maxZoom: 19, attribution: '© HOT © OpenStreetMap' }
     }
 };
@@ -115,6 +125,33 @@ const startPoint = await geocodeAddress(destinationsConfig.start.address);
 if (!startPoint) {
     console.error('Could not geocode start address');
     process.exit(1);
+}
+
+// Function to get hiking route from GraphHopper API
+async function getHikingRoute(start, end, viaPoints = []) {
+    const points = [start, ...viaPoints, end];
+    const pointsParam = points.map(p => `point=${p[0]},${p[1]}`).join('&');
+    
+    const apiKey = process.env.GRAPHHOPPER_API_KEY || '';
+    const url = `https://graphhopper.com/api/1/route?${pointsParam}&profile=foot&points_encoded=false&key=${apiKey}`;
+    
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.paths && data.paths.length > 0) {
+            const coords = data.paths[0].points.coordinates.map(c => [c[1], c[0]]);
+            console.log(`Hiking route found with ${coords.length} waypoints`);
+            return coords;
+        } else if (data.message) {
+            console.warn('GraphHopper API:', data.message);
+        }
+    } catch (error) {
+        console.error('Error fetching hiking route:', error);
+    }
+    
+    console.log('Falling back to OSRM foot profile...');
+    return getRouteCoordinates(start, end, 'foot', viaPoints);
 }
 
 // Function to get route waypoints from OSRM
@@ -180,6 +217,14 @@ for (let i = 0; i < destinationsConfig.stops.length; i++) {
                 currentPoint[1] + (nextPoint[1] - currentPoint[1]) * t
             ]);
         }
+    } else if (stop.travelMode === 'hike') {
+        const viaPoints = stop.viaPoints || [];
+        if (viaPoints.length > 0) {
+            console.log(`Getting hike route (${stop.icon}) from "${previousLabel}" to "${stop.label || 'waypoint'}" via ${viaPoints.length} waypoints...`);
+        } else {
+            console.log(`Getting hike route (${stop.icon}) from "${previousLabel}" to "${stop.label || 'waypoint'}"...`);
+        }
+        coords = await getHikingRoute(currentPoint, nextPoint, viaPoints);
     } else {
         const viaPoints = stop.viaPoints || [];
         if (viaPoints.length > 0) {

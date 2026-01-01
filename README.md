@@ -63,18 +63,23 @@ Choose different map styles with the `--tile` flag:
 | `osm` | OpenStreetMap (default) | 19 |
 | `watercolor` | Stamen Watercolor - artistic, painterly style | 16 |
 | `terrain` | OpenTopoMap - topographic with elevation | 17 |
-| `toner` | CartoDB Positron - light, clean, minimal | 20 |
-| `dark` | CartoDB Dark Matter - dark mode style | 20 |
-| `voyager` | CartoDB Voyager - colorful, modern | 20 |
+| `toner` | CARTO Positron - light, clean, minimal | 20 |
+| `toner-nolabels` | CARTO Positron without labels | 20 |
+| `dark` | CARTO Dark Matter - dark mode style | 20 |
+| `dark-nolabels` | CARTO Dark Matter without labels | 20 |
+| `voyager` | CARTO Voyager - colorful, modern | 20 |
+| `voyager-nolabels` | CARTO Voyager without labels | 20 |
 | `humanitarian` | Humanitarian OSM - clear, high contrast | 19 |
 
 **Note:** Zoom levels in your JSON config will be automatically clamped to the tile layer's maximum zoom to avoid missing tiles (404 errors).
+
+**Tip:** Use `-nolabels` variants for a cleaner map where only your custom labels are shown.
 
 **Examples:**
 ```bash
 npm run preview -- trip.json --tile watercolor
 npm run render -- trip.json --tile terrain
-npm run preview -- trip.json --tile=dark
+npm run preview -- trip.json --tile voyager-nolabels
 ```
 
 ## Configuration

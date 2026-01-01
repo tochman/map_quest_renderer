@@ -14,7 +14,7 @@
       "label": "Gulf Gråbo",
       "travelMode": "driving",
       "icon": "car",
-      "zoomLevel": 13
+      "zoomLevel": 11
     },
     {
       "coordinates": [
@@ -44,7 +44,7 @@
       "label": "Kvarnruinen",
       "travelMode": "hike",
       "icon": "backpacker",
-      "zoomLevel": 14
+      "zoomLevel": 15
     }
   ],
   "animation": {

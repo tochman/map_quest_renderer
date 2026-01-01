@@ -25,37 +25,47 @@ const iconRendererCode = await readFile(join(__dirname, 'icons', 'icon-renderer.
 // Tile layer configurations (all free, no API key required)
 const TILE_LAYERS = {
     osm: {
-        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
         options: { maxZoom: 19, attribution: '© OpenStreetMap contributors' }
     },
     watercolor: {
-        // Stamen Watercolor hosted on archive.org (no API key needed)
+        // Stamen Watercolor hosted by Smithsonian
         url: 'https://watercolormaps.collection.cooperhewitt.org/tile/watercolor/{z}/{x}/{y}.jpg',
-        options: { minZoom: 1, maxZoom: 16, attribution: '© Stamen Design © OpenStreetMap' }
+        options: { minZoom: 1, maxZoom: 15, attribution: '© Stamen Design © OpenStreetMap' }
     },
     terrain: {
         // OpenTopoMap - free terrain tiles
-        url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+        url: 'https://tile.opentopomap.org/{z}/{x}/{y}.png',
         options: { maxZoom: 17, attribution: '© OpenTopoMap © OpenStreetMap' }
     },
+    // CartoDB tiles - with labels
     toner: {
-        // CartoDB Positron (light, clean style - similar to toner)
-        url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
-        options: { maxZoom: 20, attribution: '© CartoDB © OpenStreetMap' }
+        url: 'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+        options: { maxZoom: 20, attribution: '© CARTO © OpenStreetMap' }
     },
     dark: {
-        // CartoDB Dark Matter
-        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-        options: { maxZoom: 20, attribution: '© CartoDB © OpenStreetMap' }
+        url: 'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+        options: { maxZoom: 20, attribution: '© CARTO © OpenStreetMap' }
     },
     voyager: {
-        // CartoDB Voyager (colorful, modern)
-        url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
-        options: { maxZoom: 20, attribution: '© CartoDB © OpenStreetMap' }
+        url: 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+        options: { maxZoom: 20, attribution: '© CARTO © OpenStreetMap' }
+    },
+    // CartoDB tiles - NO labels (cleaner look)
+    'toner-nolabels': {
+        url: 'https://a.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png',
+        options: { maxZoom: 20, attribution: '© CARTO © OpenStreetMap' }
+    },
+    'dark-nolabels': {
+        url: 'https://a.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png',
+        options: { maxZoom: 20, attribution: '© CARTO © OpenStreetMap' }
+    },
+    'voyager-nolabels': {
+        url: 'https://a.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png',
+        options: { maxZoom: 20, attribution: '© CARTO © OpenStreetMap' }
     },
     humanitarian: {
-        // Humanitarian OpenStreetMap
-        url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+        url: 'https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
         options: { maxZoom: 19, attribution: '© HOT © OpenStreetMap' }
     }
 };
@@ -352,6 +362,7 @@ const options = {
     finalDestination: destinationsConfig.stops[destinationsConfig.stops.length - 1].label,
     title: destinationsConfig.title || 'ADVENTURE',
     date: destinationsConfig.date || new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+    startZoomLevel: destinationsConfig.start.zoomLevel || null,  // Zoom level for flyTo to start
     // Pass timing info for consistent rendering
     titleDuration: TITLE_DURATION,
     panDuration: PAN_DURATION,
