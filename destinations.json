@@ -30,7 +30,7 @@
         12.111491
       ],
       "label": "DESTINATION: GRILLPLATS",
-      "travelMode": "feet",
+      "travelMode": "hike",
       "icon": "backpacker"
     }, {
       "coordinates": [
@@ -38,7 +38,7 @@
         12.1122
       ],
       "label": "Target: VARGGROPEN",
-      "travelMode": "feet",
+      "travelMode": "hike",
       "icon": "backpacker"
     }
   ],

@@ -2,6 +2,10 @@ import puppeteer from 'puppeteer';
 import { fileURLToPath } from 'url';
 import { dirname, join, basename } from 'path';
 import { readFile } from 'fs/promises';
+import * as dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -110,17 +114,17 @@ if (!startPoint) {
 }
 
 // Function to get hiking route from GraphHopper API
-// GraphHopper's 'hike' profile prefers trails over roads
+// Uses 'foot' profile (supported on free tier) which routes on paths/trails
 async function getHikingRoute(start, end, viaPoints = []) {
     // Build coordinates array: [start, via1, via2, ..., end]
     const points = [start, ...viaPoints, end];
     const pointsParam = points.map(p => `point=${p[0]},${p[1]}`).join('&');
     
-    // Using free GraphHopper API - limited to 500 requests/day
-    // For production, get your own API key at https://www.graphhopper.com/
-    const url = `https://graphhopper.com/api/1/route?${pointsParam}&profile=hike&points_encoded=false&key=`;
+    // Get API key from environment variable
+    const apiKey = process.env.GRAPHHOPPER_API_KEY || '';
+    // Use 'foot' profile - free tier supported, routes on pedestrian paths/trails
+    const url = `https://graphhopper.com/api/1/route?${pointsParam}&profile=foot&points_encoded=false&key=${apiKey}`;
     
-    // Note: Free tier works without key for testing, but is rate-limited
     try {
         const response = await fetch(url);
         const data = await response.json();
