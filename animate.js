@@ -22,6 +22,9 @@ const destinationsConfig = JSON.parse(await readFile(destinationsPath, 'utf-8'))
 // Load icon renderer module
 const iconRendererCode = await readFile(join(__dirname, 'icons', 'icon-renderer.js'), 'utf-8');
 
+// Load zoom utilities module
+const zoomUtilsCode = await readFile(join(__dirname, 'js', 'zoom-utils.js'), 'utf-8');
+
 // Tile layer configurations (all free, no API key required)
 const TILE_LAYERS = {
     osm: {
@@ -455,6 +458,12 @@ async function previewAnimation() {
     await page.evaluate((code) => {
         eval(code);
     }, iconRendererCode);
+    
+    // Inject the zoom utilities module
+    console.log('Loading zoom utilities module...');
+    await page.evaluate((code) => {
+        eval(code);
+    }, zoomUtilsCode);
     
     // Wait for animation function to be ready
     await page.waitForFunction(() => typeof window.animateRoute === 'function', { timeout: 5000 });

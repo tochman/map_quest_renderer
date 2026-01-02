@@ -15,6 +15,9 @@ const __dirname = dirname(__filename);
 // Load icon renderer module
 const iconRendererCode = await readFile(join(__dirname, 'icons', 'icon-renderer.js'), 'utf-8');
 
+// Load zoom utilities module
+const zoomUtilsCode = await readFile(join(__dirname, 'js', 'zoom-utils.js'), 'utf-8');
+
 // Configuration
 const FPS = 30;  // Output frame rate
 const FRAME_DIR = join(__dirname, 'frames');
@@ -368,6 +371,12 @@ async function createFrameByFrameAnimation() {
         eval(code);
     }, iconRendererCode);
     
+    // Inject the zoom utilities module
+    console.log('Loading zoom utilities module...');
+    await page.evaluate((code) => {
+        eval(code);
+    }, zoomUtilsCode);
+    
     // Setup the frame-by-frame animation controller with FULL cinematic features
     console.log('Setting up cinematic frame-by-frame animation...');
     await page.evaluate((totalFrames, fps, titleEndFrame, panEndFrame, routeEndFrame, routeDuration) => {
@@ -375,21 +384,17 @@ async function createFrameByFrameAnimation() {
         const { routeSegments, lineColor, lineWidth, finalDestination, title, date } = window.mapData;
         const allCoordinates = routeSegments.flatMap(seg => seg.coordinates);
         
-        // Calculate segment thresholds (for determining which segment we're in)
-        const segmentLengths = routeSegments.map(seg => seg.coordinates.length);
-        const totalLength = segmentLengths.reduce((a, b) => a + b, 0);
-        const segmentProgressThresholds = [];
-        let cumulativeProgress = 0;
-        for (let i = 0; i < segmentLengths.length; i++) {
-            cumulativeProgress += segmentLengths[i] / totalLength;
-            segmentProgressThresholds.push(cumulativeProgress);
-        }
+        // Calculate segment thresholds and zoom levels using shared utilities
+        const segmentProgressThresholds = window.ZoomUtils.calculateSegmentProgressThresholds(routeSegments);
+        const segmentZoomLevels = window.ZoomUtils.calculateSegmentZoomLevels(map, routeSegments, allCoordinates, {
+            maxZoom: 15,
+            defaultCloseZoom: 14
+        });
+        const zoomKeyframes = window.ZoomUtils.createZoomKeyframes(segmentZoomLevels, segmentProgressThresholds);
         
-        // Calculate bounds and zoom levels
+        // Calculate bounds for overview
         const bounds = L.latLngBounds(allCoordinates);
-        const startZoom = 13;
-        const midZoom = map.getBoundsZoom(bounds, false, [80, 80]);
-        const endZoom = 14;
+        const startZoom = segmentZoomLevels[0] || 13;
         
         // Animation state (persistent across frames)
         window.animState = {
@@ -580,21 +585,9 @@ async function createFrameByFrameAnimation() {
             if (frameNumber < routeEndFrame) {
                 const routeProgress = (frameNumber - panEndFrame) / (routeEndFrame - panEndFrame);
                 
-                // Determine current segment
-                let currentSegment = routeSegments.length - 1;
-                let segmentStartProgress = 0;
-                for (let i = 0; i < segmentProgressThresholds.length; i++) {
-                    if (routeProgress < segmentProgressThresholds[i]) {
-                        currentSegment = i;
-                        break;
-                    }
-                    segmentStartProgress = segmentProgressThresholds[i];
-                }
-                
-                // Calculate progress within segment
-                const segmentEndProgress = segmentProgressThresholds[currentSegment] || 1;
-                const segmentDuration = segmentEndProgress - segmentStartProgress;
-                const segmentProgress = segmentDuration > 0 ? Math.min((routeProgress - segmentStartProgress) / segmentDuration, 1) : 1;
+                // Use shared utility to determine segment info
+                const segInfo = window.ZoomUtils.getSegmentInfo(routeProgress, segmentProgressThresholds);
+                const { currentSegment, segmentProgress } = segInfo;
                 
                 // Fade in waypoint labels when approaching
                 for (let i = 0; i < state.waypointMarkers.length; i++) {
@@ -637,10 +630,8 @@ async function createFrameByFrameAnimation() {
                 
                 const coordinates = routeSegments[currentSegment].coordinates;
                 
-                // === CINEMATIC ZOOM ===
-                // Smooth sine curve: start zoomed in -> zoom out -> zoom back in
-                const zoomCurve = Math.sin(routeProgress * Math.PI);
-                const targetZoom = startZoom - (startZoom - midZoom) * zoomCurve;
+                // === DYNAMIC ZOOM from JSON config (using shared utility) ===
+                const targetZoom = window.ZoomUtils.getInterpolatedZoom(routeProgress, zoomKeyframes);
                 
                 // Calculate position within current segment
                 const totalPoints = coordinates.length - 1;
@@ -671,7 +662,10 @@ async function createFrameByFrameAnimation() {
                 const lookAheadPos = coordinates[lookAheadIndex];
                 
                 // Blend between vehicle position and look-ahead (more ahead when zoomed out)
-                const lookAheadBlend = 0.3 * zoomCurve; // More look-ahead when zoomed out
+                // Calculate blend based on how zoomed out we are from startZoom
+                const zoomRange = startZoom - (segmentZoomLevels[segmentZoomLevels.length - 1] || 10);
+                const zoomOutFactor = Math.max(0, (startZoom - targetZoom) / Math.max(zoomRange, 1));
+                const lookAheadBlend = 0.3 * zoomOutFactor; // More look-ahead when zoomed out
                 const targetLat = vehiclePos[0] + (lookAheadPos[0] - vehiclePos[0]) * lookAheadBlend;
                 const targetLng = vehiclePos[1] + (lookAheadPos[1] - vehiclePos[1]) * lookAheadBlend;
                 

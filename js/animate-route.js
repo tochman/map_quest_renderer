@@ -66,25 +66,14 @@ async function animateRoute() {
     
     await wait(1000);
     
-    // Calculate zoom levels BEFORE flyTo
+    // Calculate zoom levels using shared utility
     const maxZoom = 15; // Watercolor tile limit
-    const bounds = L.latLngBounds(allCoordinates);
-    const overviewZoom = map.getBoundsZoom(bounds, false, [80, 80]);
-    const defaultCloseZoom = Math.min(14, maxZoom);
-    
-    const segmentZoomLevels = routeSegments.map((seg, idx) => {
-        let zoom;
-        if (seg.zoomLevel !== null && seg.zoomLevel !== undefined) {
-            zoom = seg.zoomLevel;
-        } else {
-            const segBounds = L.latLngBounds(seg.coordinates);
-            const autoZoom = map.getBoundsZoom(segBounds, false, [100, 100]);
-            zoom = Math.max(autoZoom, overviewZoom, defaultCloseZoom);
-        }
-        return Math.min(zoom, maxZoom);
+    const segmentZoomLevels = window.ZoomUtils.calculateSegmentZoomLevels(map, routeSegments, allCoordinates, {
+        maxZoom,
+        defaultCloseZoom: 14
     });
     
-    const startZoom = startZoomLevel || segmentZoomLevels[0] || defaultCloseZoom;
+    const startZoom = startZoomLevel || segmentZoomLevels[0] || 14;
     
     // Cinematic flyTo from overview (zoom 11) to start position
     map.flyTo(startCoord, startZoom, { 
@@ -187,27 +176,10 @@ async function animateRoute() {
     }
     
     // Calculate segment durations based on their lengths
-    const segmentLengths = routeSegments.map(seg => seg.coordinates.length);
-    const totalLength = segmentLengths.reduce((a, b) => a + b, 0);
-    const segmentDurations = segmentLengths.map(len => (len / totalLength) * animationDuration);
-    const segmentProgressThresholds = [];
-    let cumulativeProgress = 0;
-    for (let i = 0; i < segmentDurations.length; i++) {
-        cumulativeProgress += segmentDurations[i] / animationDuration;
-        segmentProgressThresholds.push(cumulativeProgress);
-    }
+    const segmentProgressThresholds = window.ZoomUtils.calculateSegmentProgressThresholds(routeSegments);
     
     // Create zoom keyframes for smooth interpolation between segments
-    const zoomKeyframes = [];
-    zoomKeyframes.push({ progress: 0, zoom: segmentZoomLevels[0] });
-    
-    // Add keyframe at start of each segment
-    for (let i = 0; i < segmentProgressThresholds.length; i++) {
-        zoomKeyframes.push({ 
-            progress: segmentProgressThresholds[i], 
-            zoom: segmentZoomLevels[i]
-        });
-    }
+    const zoomKeyframes = window.ZoomUtils.createZoomKeyframes(segmentZoomLevels, segmentProgressThresholds);
     
     // Wrap animation in a Promise
     await new Promise((animationResolve) => {
@@ -215,21 +187,9 @@ async function animateRoute() {
             const elapsed = currentTime - startTime;
             const progress = Math.min(elapsed / animationDuration, 1);
             
-            // Determine which segment we're on
-            let currentSegment = routeSegments.length - 1;
-            let segmentStartProgress = 0;
-            for (let i = 0; i < segmentProgressThresholds.length; i++) {
-                if (progress < segmentProgressThresholds[i]) {
-                    currentSegment = i;
-                    break;
-                }
-                segmentStartProgress = segmentProgressThresholds[i];
-            }
-            
-            // Calculate progress within current segment
-            const segmentEndProgress = segmentProgressThresholds[currentSegment] || 1;
-            const segmentDuration = segmentEndProgress - segmentStartProgress;
-            const segmentProgress = segmentDuration > 0 ? Math.min((progress - segmentStartProgress) / segmentDuration, 1) : 1;
+            // Use shared utility to determine segment info
+            const segInfo = window.ZoomUtils.getSegmentInfo(progress, segmentProgressThresholds);
+            const { currentSegment, segmentProgress } = segInfo;
             
             // Fade in waypoint labels when 1/3 of distance away
             for (let i = 0; i < waypointMarkers.length; i++) {
@@ -281,22 +241,8 @@ async function animateRoute() {
             const coordinates = routeSegments[currentSegment].coordinates;
             const eased = segmentProgress;
             
-            // === DYNAMIC ZOOM from JSON config ===
-            let prevKeyframe = zoomKeyframes[0];
-            let nextKeyframe = zoomKeyframes[zoomKeyframes.length - 1];
-            for (let i = 0; i < zoomKeyframes.length - 1; i++) {
-                if (progress >= zoomKeyframes[i].progress && progress <= zoomKeyframes[i + 1].progress) {
-                    prevKeyframe = zoomKeyframes[i];
-                    nextKeyframe = zoomKeyframes[i + 1];
-                    break;
-                }
-            }
-            
-            // Smooth interpolation between keyframes
-            const keyframeRange = nextKeyframe.progress - prevKeyframe.progress;
-            const keyframeT = keyframeRange > 0 ? (progress - prevKeyframe.progress) / keyframeRange : 0;
-            const smoothT = keyframeT * keyframeT * (3 - 2 * keyframeT); // smoothstep
-            const targetZoom = prevKeyframe.zoom + (nextKeyframe.zoom - prevKeyframe.zoom) * smoothT;
+            // === DYNAMIC ZOOM from JSON config (using shared utility) ===
+            const targetZoom = window.ZoomUtils.getInterpolatedZoom(progress, zoomKeyframes);
             
             // Calculate vehicle position within segment
             const totalPoints = coordinates.length - 1;
