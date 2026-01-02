@@ -4,7 +4,7 @@
  * Handles rendering logic for all vehicle/character icons in the map animation.
  * 
  * VERIFIED ICON ORIENTATIONS at rotate(0deg):
- * - car.png: faces RIGHT → (hood on right)
+ * - car.png: faces LEFT ← (hood on left) - but we treat as RIGHT with scaleX flip
  * - bike.png: faces LEFT ← (handlebars on left)
  * - person.png: stands UPRIGHT, faces RIGHT →
  * - backpack.png: stands UPRIGHT, faces LEFT ←
@@ -20,7 +20,7 @@ const ICON_CONFIG = {
         size: 60
     },
     car: {
-        defaultFacing: 'right',
+        defaultFacing: 'left',  // Actually faces left, but we flip it
         rotates: true,
         size: 60
     },
@@ -39,74 +39,86 @@ const ICON_CONFIG = {
 /**
  * Calculate the transform for an icon based on direction of travel.
  * 
- * For ROTATING icons (car, bike):
- *   - Rotate DYNAMICALLY to follow immediate road angle
- *   - Use short lookahead for responsive tilting
- *   - Smooth interpolation to avoid jitter
- * 
- * For NON-ROTATING icons (person, backpacker):
- *   - Stay upright (no rotation)
- *   - Flip horizontally (scaleX) based on travel direction
+ * @param {string} iconType - 'car', 'bike', 'person', or 'backpacker'
+ * @param {number} dx - horizontal movement (positive = right)
+ * @param {number} dy - vertical movement (positive = down)
+ * @param {number} lastAngle - previous angle for smooth interpolation
+ * @param {number} interpolationFactor - smoothing factor (0.1 = slow, 0.3 = fast)
+ * @returns {object} { angle, scaleX, newLastAngle }
  */
-function calculateIconTransform(iconType, dx, dy, lastAngle, interpolationFactor = 0.15) {
-    const config = ICON_CONFIG[iconType] || ICON_CONFIG.person;
-    
-    // Direction of travel in degrees using atan2
-    // atan2(dy, dx): 0° = east, 90° = south, ±180° = west, -90° = north
-    const directionAngle = Math.atan2(dy, dx) * 180 / Math.PI;
+function calculateIconTransform(iconType, dx, dy, lastAngle, interpolationFactor = 0.1) {
+    // atan2 gives: 0°=right, 90°=down, ±180°=left, -90°=up
+    const direction = Math.atan2(dy, dx) * 180 / Math.PI;
     
     let targetAngle = 0;
     let scaleX = 1;
+    let newLastAngle = lastAngle;
     
-    if (config.rotates) {
-        // ROTATING ICONS (bike, car)
-        // Car and bike face LEFT at rotate(0deg)
-        // Formula: CSS_rotation = 180 - directionAngle
-        targetAngle = 180 - directionAngle;
+    if (iconType === 'car') {
+        // CAR: Side view, we flip with scaleX when going left
+        // Icon faces LEFT at 0deg, so flip when going RIGHT direction
+        const goingLeft = Math.abs(direction) > 90;
+        scaleX = goingLeft ? -1 : 1;
         
-        // Normalize to -180 to 180 range
-        while (targetAngle > 180) targetAngle -= 360;
-        while (targetAngle < -180) targetAngle += 360;
+        // Calculate tilt angle
+        let tilt;
+        if (goingLeft) {
+            tilt = direction > 0 ? -(direction - 180) : -(direction + 180);
+        } else {
+            tilt = direction;
+        }
         
-        // Smooth interpolation for rotation
-        let angleDiff = targetAngle - lastAngle;
+        // Smooth interpolation
+        let angleDiff = tilt - lastAngle;
         while (angleDiff > 180) angleDiff -= 360;
         while (angleDiff < -180) angleDiff += 360;
+        if (Math.abs(angleDiff) > 2) {
+            newLastAngle = lastAngle + angleDiff * interpolationFactor;
+        }
+        targetAngle = newLastAngle;
         
-        if (Math.abs(angleDiff) > 0.5) {
-            targetAngle = lastAngle + angleDiff * interpolationFactor;
+    } else if (iconType === 'bike') {
+        // BIKE: Side view facing LEFT
+        // Flip when going RIGHT
+        const goingRight = Math.abs(direction) <= 90;
+        scaleX = goingRight ? -1 : 1;
+        
+        // Calculate tilt angle
+        let tilt;
+        if (goingRight) {
+            tilt = -direction;
         } else {
-            targetAngle = lastAngle;
+            tilt = direction > 0 ? direction - 180 : direction + 180;
         }
         
-        while (targetAngle > 180) targetAngle -= 360;
-        while (targetAngle < -180) targetAngle += 360;
+        // Smooth interpolation
+        let angleDiff = tilt - lastAngle;
+        while (angleDiff > 180) angleDiff -= 360;
+        while (angleDiff < -180) angleDiff += 360;
+        if (Math.abs(angleDiff) > 2) {
+            newLastAngle = lastAngle + angleDiff * interpolationFactor;
+        }
+        targetAngle = newLastAngle;
         
     } else {
-        // NON-ROTATING ICONS (person, backpacker)
-        // These ALWAYS stay upright - never rotate
-        // Only flip horizontally based on travel direction
-        
-        targetAngle = 0;  // Always upright
-        
-        // Flip based on horizontal movement direction
+        // PERSON and BACKPACKER: Stay upright, only flip horizontally
+        targetAngle = 0;
         const travelingLeft = dx < 0;
         
-        if (config.defaultFacing === 'right') {
-            // Icon faces right by default
-            // Mirror (scaleX = -1) when traveling left
-            scaleX = travelingLeft ? -1 : 1;
-        } else {
-            // Icon faces left by default
-            // Mirror when traveling right
+        if (iconType === 'backpacker') {
+            // Backpacker faces LEFT by default, flip when going RIGHT
             scaleX = travelingLeft ? 1 : -1;
+        } else {
+            // Person faces RIGHT by default, flip when going LEFT
+            scaleX = travelingLeft ? -1 : 1;
         }
+        newLastAngle = 0;
     }
     
     return { 
         angle: targetAngle, 
         scaleX: scaleX, 
-        newLastAngle: targetAngle 
+        newLastAngle: newLastAngle 
     };
 }
 
@@ -114,12 +126,8 @@ function calculateIconTransform(iconType, dx, dy, lastAngle, interpolationFactor
  * Get the CSS transform string for an icon
  */
 function getIconTransformCSS(angle, scaleX) {
-    // For non-rotating icons (scaleX may be -1), just return scaleX
-    // For rotating icons (scaleX = 1), just return rotation
-    if (scaleX !== 1) {
-        return "scaleX(" + scaleX + ")";
-    }
-    return "rotate(" + angle + "deg)";
+    // Always apply scaleX first, then rotation
+    return `scaleX(${scaleX}) rotate(${angle}deg)`;
 }
 
 /**
