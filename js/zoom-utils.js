@@ -87,6 +87,32 @@ function getInterpolatedZoom(progress, zoomKeyframes) {
 }
 
 /**
+ * Apply cinematic zoom curve - creates a "zoom out in middle, zoom in at ends" effect
+ * This overlays the segment-based zoom with a smooth cinematic variation
+ * @param {number} progress - Current animation progress (0-1)
+ * @param {number} baseZoom - The base zoom level from segment interpolation
+ * @param {number} zoomOutAmount - How many zoom levels to zoom out at the peak (default: 2)
+ * @returns {number} Adjusted zoom level with cinematic curve applied
+ */
+function applyCinematicZoom(progress, baseZoom, zoomOutAmount = 2) {
+    // Sine curve: 0 at start/end, peaks at 1 in the middle
+    const cinematicCurve = Math.sin(progress * Math.PI);
+    
+    // Zoom OUT (subtract) in the middle of the animation
+    return baseZoom - (zoomOutAmount * cinematicCurve);
+}
+
+/**
+ * Get the cinematic zoom curve value at a given progress
+ * Useful for other effects that want to sync with the zoom (like camera look-ahead)
+ * @param {number} progress - Current animation progress (0-1)
+ * @returns {number} Curve value from 0 (at ends) to 1 (at middle)
+ */
+function getCinematicCurve(progress) {
+    return Math.sin(progress * Math.PI);
+}
+
+/**
  * Calculate segment progress thresholds based on coordinate counts
  * @param {Array} routeSegments - Array of route segments
  * @returns {Array} Array of cumulative progress thresholds (0-1)
@@ -140,6 +166,8 @@ if (typeof window !== 'undefined') {
         calculateSegmentZoomLevels,
         createZoomKeyframes,
         getInterpolatedZoom,
+        applyCinematicZoom,
+        getCinematicCurve,
         calculateSegmentProgressThresholds,
         getSegmentInfo
     };
@@ -151,6 +179,8 @@ if (typeof module !== 'undefined' && module.exports) {
         calculateSegmentZoomLevels,
         createZoomKeyframes,
         getInterpolatedZoom,
+        applyCinematicZoom,
+        getCinematicCurve,
         calculateSegmentProgressThresholds,
         getSegmentInfo
     };

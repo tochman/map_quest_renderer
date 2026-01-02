@@ -241,8 +241,12 @@ async function animateRoute() {
             const coordinates = routeSegments[currentSegment].coordinates;
             const eased = segmentProgress;
             
-            // === DYNAMIC ZOOM from JSON config (using shared utility) ===
-            const targetZoom = window.ZoomUtils.getInterpolatedZoom(progress, zoomKeyframes);
+            // === CINEMATIC ZOOM: segment-based + smooth zoom out/in curve ===
+            const baseZoom = window.ZoomUtils.getInterpolatedZoom(progress, zoomKeyframes);
+            const targetZoom = window.ZoomUtils.applyCinematicZoom(progress, baseZoom, 2);
+            
+            // Get cinematic curve for camera look-ahead blending
+            const cinematicCurve = window.ZoomUtils.getCinematicCurve(progress);
             
             // Calculate vehicle position within segment
             const totalPoints = coordinates.length - 1;
@@ -271,9 +275,9 @@ async function animateRoute() {
             const lookAheadIndex = Math.min(safeIndex + lookAheadDistance, coordinates.length - 1);
             const lookAheadPos = coordinates[lookAheadIndex];
             
-            // Blend between vehicle position and look-ahead
-            const zoomOutFactor = Math.max(0, (16 - targetZoom) / 6);
-            const lookAheadBlend = 0.25 * zoomOutFactor;
+            // Blend between vehicle position and look-ahead (more ahead when zoomed out)
+            // Use the cinematic curve directly - more look-ahead in the middle when zoomed out
+            const lookAheadBlend = 0.25 * cinematicCurve;
             const targetLat = vehiclePos[0] + (lookAheadPos[0] - vehiclePos[0]) * lookAheadBlend;
             const targetLng = vehiclePos[1] + (lookAheadPos[1] - vehiclePos[1]) * lookAheadBlend;
             
