@@ -4,6 +4,10 @@ import { dirname, join, basename } from 'path';
 import { readFile, mkdir, rm } from 'fs/promises';
 import { execSync } from 'child_process';
 import { existsSync } from 'fs';
+import * as dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
