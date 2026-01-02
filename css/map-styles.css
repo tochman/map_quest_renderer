@@ -1,0 +1,217 @@
+/**
+ * Map Animation Styles
+ * All styling for the vintage Indiana Jones map effect
+ */
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Special Elite', 'Courier New', monospace;
+    overflow: hidden;
+}
+
+#map {
+    width: 100%;
+    height: 100vh;
+    position: relative;
+}
+
+.leaflet-container {
+    background: #e8dcc7;
+    /* Vintage map styling */
+    filter: sepia(0.4) saturate(0.6) contrast(1.15) brightness(1.05);
+}
+
+/* Make map tiles look aged */
+.leaflet-tile {
+    filter: contrast(0.95) brightness(1.1);
+    opacity: 0.95 !important;
+}
+
+/* Parchment texture overlay */
+#parchment-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: 
+        repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(139, 90, 43, 0.03) 2px, rgba(139, 90, 43, 0.03) 4px),
+        repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(139, 90, 43, 0.03) 2px, rgba(139, 90, 43, 0.03) 4px);
+    background-color: rgba(244, 232, 208, 0.4);
+    pointer-events: none;
+    z-index: 1000;
+    mix-blend-mode: multiply;
+}
+
+/* Compass rose */
+#compass {
+    position: absolute;
+    bottom: 40px;
+    right: 40px;
+    width: 100px;
+    height: 100px;
+    z-index: 1001;
+    opacity: 0.9;
+    filter: drop-shadow(4px 4px 8px rgba(0,0,0,0.4));
+}
+
+/* Date stamp */
+#date-stamp {
+    position: absolute;
+    top: 30px;
+    left: 30px;
+    font-family: 'Special Elite', 'Courier New', monospace;
+    font-size: 24px;
+    color: #3d2817;
+    background: rgba(244, 232, 208, 0.9);
+    padding: 15px 25px;
+    border: 3px solid #8B4513;
+    box-shadow: 3px 3px 10px rgba(0,0,0,0.3);
+    z-index: 1001;
+    transform: rotate(-2deg);
+    opacity: 0;
+    transition: opacity 0.5s;
+}
+
+/* Centered title card */
+#title-card {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Special Elite', 'Courier New', monospace;
+    color: #3d2817;
+    background: rgba(244, 232, 208, 0.95);
+    padding: 40px 60px;
+    border: 4px solid #8B4513;
+    box-shadow: 5px 5px 20px rgba(0,0,0,0.5);
+    z-index: 2000;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 1s;
+    max-width: 800px;
+}
+
+#title-card .title-text {
+    font-size: 48px;
+    font-weight: bold;
+    margin-bottom: 15px;
+    line-height: 1.2;
+}
+
+#title-card .date-text {
+    font-size: 28px;
+    color: #5a3d2b;
+    max-width: 80%;
+    margin: 0 auto;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    line-height: 1.3;
+    text-align: center;
+}
+
+/* Destination card */
+#destination-card {
+    position: absolute;
+    bottom: 15%;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Special Elite', 'Courier New', monospace;
+    color: #3d2817;
+    background: rgba(244, 232, 208, 0.95);
+    padding: 30px 50px;
+    border: 4px solid #8B4513;
+    box-shadow: 5px 5px 20px rgba(0,0,0,0.5);
+    z-index: 2000;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 1s;
+}
+
+#destination-card .destination-text {
+    font-size: 36px;
+    font-weight: bold;
+    letter-spacing: 2px;
+}
+
+/* Location labels */
+.location-label {
+    font-family: 'Special Elite', 'Courier New', monospace;
+    font-size: 15px;
+    color: #3d2817;
+    background: rgba(244, 232, 208, 0.95);
+    padding: 8px 12px;
+    border: 2px solid #8B4513;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.4);
+    white-space: nowrap;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Vehicle/Person Icons */
+#motorcycle {
+    width: 60px;
+    height: 60px;
+    position: absolute;
+    z-index: 999;
+    filter: drop-shadow(4px 4px 6px rgba(0,0,0,0.7));
+    pointer-events: none;
+    background-image: url('../icons/bike.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+}
+
+#person {
+    width: 40px;
+    height: 40px;
+    position: absolute;
+    z-index: 999;
+    filter: drop-shadow(4px 4px 6px rgba(0,0,0,0.7));
+    pointer-events: none;
+    background-image: url('../icons/person.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+}
+
+/* Car icon - faces right (opposite direction to bike) */
+#car {
+    width: 60px;
+    height: 60px;
+    position: absolute;
+    z-index: 999;
+    filter: drop-shadow(4px 4px 6px rgba(0,0,0,0.7));
+    pointer-events: none;
+    background-image: url('../icons/car.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+}
+
+/* Backpacker icon */
+#backpacker {
+    width: 35px;
+    height: 35px;
+    position: absolute;
+    z-index: 999;
+    filter: drop-shadow(4px 4px 6px rgba(0,0,0,0.7));
+    pointer-events: none;
+    background-image: url('../icons/backpack.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+}
