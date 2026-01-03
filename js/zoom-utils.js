@@ -48,12 +48,17 @@ function createZoomKeyframes(segmentZoomLevels, segmentProgressThresholds) {
     // Start keyframe
     keyframes.push({ progress: 0, zoom: segmentZoomLevels[0] });
     
-    // Add keyframe at each segment boundary
+    // Add keyframe closer to the END of each segment for later zoom transitions
+    // This makes the zoom transition happen closer to arriving at the destination
+    let prevThreshold = 0;
     for (let i = 0; i < segmentProgressThresholds.length; i++) {
+        const threshold = segmentProgressThresholds[i];
+        // Place the keyframe 60% through the segment - zoom changes closer to arrival
         keyframes.push({ 
-            progress: segmentProgressThresholds[i], 
+            progress: prevThreshold + (threshold - prevThreshold) * 0.6,  // 60% into the segment
             zoom: segmentZoomLevels[i]
         });
+        prevThreshold = threshold;
     }
     
     return keyframes;
@@ -88,18 +93,20 @@ function getInterpolatedZoom(progress, zoomKeyframes) {
 
 /**
  * Apply cinematic zoom curve - creates a "zoom out in middle, zoom in at ends" effect
- * This overlays the segment-based zoom with a smooth cinematic variation
+ * This interpolates between a close zoom and an overview zoom using a sine curve
  * @param {number} progress - Current animation progress (0-1)
- * @param {number} baseZoom - The base zoom level from segment interpolation
- * @param {number} zoomOutAmount - How many zoom levels to zoom out at the peak (default: 2)
- * @returns {number} Adjusted zoom level with cinematic curve applied
+ * @param {number} closeZoom - The zoom level at start/end (zoomed in, e.g. 13)
+ * @param {number} overviewZoom - The zoom level at middle (zoomed out to see more route)
+ * @returns {number} Interpolated zoom level
  */
-function applyCinematicZoom(progress, baseZoom, zoomOutAmount = 2) {
+function applyCinematicZoom(progress, closeZoom, overviewZoom) {
     // Sine curve: 0 at start/end, peaks at 1 in the middle
     const cinematicCurve = Math.sin(progress * Math.PI);
     
-    // Zoom OUT (subtract) in the middle of the animation
-    return baseZoom - (zoomOutAmount * cinematicCurve);
+    // Interpolate from closeZoom (start/end) to overviewZoom (middle)
+    // At progress 0 or 1: curve=0, returns closeZoom
+    // At progress 0.5: curve=1, returns overviewZoom
+    return closeZoom - (closeZoom - overviewZoom) * cinematicCurve;
 }
 
 /**

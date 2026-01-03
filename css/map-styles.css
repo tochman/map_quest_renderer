@@ -28,6 +28,23 @@ body {
     opacity: 0.95 !important;
 }
 
+/* Prevent dashed line from appearing to animate during zoom */
+.route-line {
+    transition: none !important;
+    -webkit-transition: none !important;
+}
+.route-line path {
+    transition: none !important;
+    -webkit-transition: none !important;
+    stroke-dashoffset: 0 !important;
+    animation: none !important;
+}
+/* Also target the SVG directly */
+.leaflet-overlay-pane svg path.route-line {
+    transition: none !important;
+    stroke-dashoffset: 0 !important;
+}
+
 /* Parchment texture overlay */
 #parchment-overlay {
     position: absolute;

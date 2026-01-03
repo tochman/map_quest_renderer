@@ -66,11 +66,12 @@ function initMap(routeSegments, options = {}) {
         }).addTo(map);
     }
     
-    // Fit bounds then set initial zoom to 11 (overview)
-    const bounds = L.latLngBounds(allCoordinates.map(c => [c[0], c[1]]));
-    map.fitBounds(bounds, { padding: [50, 50] });
-    const center = bounds.getCenter();
-    map.setView(center, 11);
+    // Start centered on the first coordinate (start position) at overview zoom
+    const startCoord = allCoordinates[0];
+    map.setView(startCoord, 11, { animate: false });
+    
+    // Display alternative routes if present (plotted in various colors)
+    displayAlternativeRoutes(routeSegments);
     
     // Store for animation
     window.mapData = {
@@ -98,6 +99,48 @@ function addMarker(marker) {
 
 function addLine(line) {
     allLines.push(line);
+}
+
+/**
+ * Display alternative hiking routes in various colors
+ */
+function displayAlternativeRoutes(routeSegments) {
+    if (!map) {
+        console.log('No map available for displaying alternatives');
+        return;
+    }
+    
+    console.log('Checking for alternative routes in', routeSegments.length, 'segments');
+    
+    routeSegments.forEach((segment, segIndex) => {
+        if (segment.alternativeRoutes && segment.alternativeRoutes.length > 0) {
+            console.log(`Segment ${segIndex}: Displaying ${segment.alternativeRoutes.length} alternative routes`);
+            
+            segment.alternativeRoutes.forEach((alt, index) => {
+                console.log(`  Alt ${index + 1}: ${alt.coords.length} points, color: ${alt.color}`);
+                
+                const line = L.polyline(alt.coords, {
+                    color: alt.color,
+                    weight: 4,
+                    opacity: 0.7,
+                    dashArray: '8, 8',
+                    smoothFactor: 1
+                }).addTo(map);
+                
+                allLines.push(line);
+                
+                // Add tooltip with distance/time info
+                const distanceKm = (alt.distance / 1000).toFixed(1);
+                const timeMin = Math.round(alt.time / 60000);
+                line.bindTooltip(`Alt ${index + 1}: ${distanceKm}km, ~${timeMin}min`, {
+                    permanent: false,
+                    direction: 'center'
+                });
+            });
+        } else {
+            console.log(`Segment ${segIndex}: No alternative routes`);
+        }
+    });
 }
 
 // Export for browser

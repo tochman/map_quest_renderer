@@ -2,31 +2,25 @@
   "title": "Solo trip Vättlefjäll",
   "date": "December 31, 2025",
   "start": {
-    "address": "Stannums Byväg 20, Lerum, Sweden",
-    "label": "START: STANNUM",
+    "coordinates": [
+      57.81356,
+      12.1706
+    ],
+    "label": "BERGUMS KYRKA",
+    "travelMode": "hike",
+    "icon": "backpacker",
     "zoomLevel": 13,
     "pause": 1
   },
   "stops": [
     {
       "coordinates": [
-        57.81356,
-        12.1706
+        57.839738,
+        12.118655
       ],
-      "label": "BERGUMS KYRKA",
+      "label": "BJÖRSJÖÅS PARKING",
       "travelMode": "driving",
       "icon": "car",
-      "zoomLevel": 13,
-      "pause": 1
-    },
-    {
-      "coordinates": [
-        57.845,
-        12.142
-      ],
-      "label": "MOLLSJÖVÄGEN PARKING",
-      "travelMode": "driving",
-      "icon": "bike",
       "zoomLevel": 13,
       "pause": 1
     },
@@ -35,11 +29,12 @@
         57.844625,
         12.111491
       ],
-      "label": "DESTINATION: GRILLPLATS",
+      "label": "GRILLPLATS",
       "travelMode": "hike",
       "icon": "backpacker",
       "zoomLevel": 14,
-      "pause": 1
+      "pause": 1,
+      "showAlternatives": true
     },
     {
       "coordinates": [
@@ -49,7 +44,18 @@
       "label": "Target: VARGGROPEN",
       "travelMode": "hike",
       "icon": "backpacker",
-      "zoomLevel": 14
+      "zoomLevel": 14,
+      "showAlternatives": true
+    },{
+      "coordinates": [
+        57.839738,
+        12.118655
+      ],
+      "label": "BJÖRSJÖÅS PARKING",
+      "travelMode": "hike",
+      "icon": "backpacker",
+      "zoomLevel": 13,
+      "pause": 1
     }
   ],
   "animation": {

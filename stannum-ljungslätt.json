@@ -3,7 +3,8 @@
   "date": "June 2024",
   "start": {
     "address": "Stannums Byväg 20, Lerum, Sweden",
-    "label": "Stannum"
+    "label": "Stannum",
+    "zoomLevel": 13
   },
   "stops": [
     {
@@ -14,7 +15,7 @@
       "label": "Gulf Gråbo",
       "travelMode": "driving",
       "icon": "car",
-      "zoomLevel": 11
+      "zoomLevel": 13
     },
     {
       "coordinates": [
@@ -28,13 +29,14 @@
     },
     {
       "coordinates": [
-        57.877093,
-        12.282847
+        57.878215,
+        12.280123
       ],
       "label": "Ljungslätt - Scoutstugan",
       "travelMode": "hike",
       "icon": "backpacker",
-      "zoomLevel": 14
+      "zoomLevel": 16,
+      "pause": 3
     },
     {
       "coordinates": [
@@ -44,7 +46,19 @@
       "label": "Kvarnruinen",
       "travelMode": "hike",
       "icon": "backpacker",
-      "zoomLevel": 15
+      "zoomLevel": 15,
+      "showAlternatives": true
+    },
+    {
+      "coordinates": [
+        57.878215,
+        12.280123
+      ],
+      "label": "Ljungslätt - Scoutstugan",
+      "travelMode": "hike",
+      "icon": "backpacker",
+      "zoomLevel": 16,
+      "pause": 3
     }
   ],
   "animation": {

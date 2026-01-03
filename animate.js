@@ -118,45 +118,168 @@ async function geocodeAddress(address) {
 }
 
 // Get start coordinates
-console.log(`Geocoding ${destinationsConfig.start.address}...`);
-const startPoint = await geocodeAddress(destinationsConfig.start.address);
-
-if (!startPoint) {
-    console.error('Could not geocode start address');
+let startPoint;
+if (destinationsConfig.start.coordinates) {
+    // Use coordinates directly if provided
+    startPoint = destinationsConfig.start.coordinates;
+    console.log(`Start coordinates: ${startPoint[0]}, ${startPoint[1]}`);
+} else if (destinationsConfig.start.address) {
+    // Geocode address
+    console.log(`Geocoding ${destinationsConfig.start.address}...`);
+    startPoint = await geocodeAddress(destinationsConfig.start.address);
+    
+    if (!startPoint) {
+        console.error('Could not geocode start address');
+        process.exit(1);
+    }
+} else {
+    console.error('Start point must have either "coordinates" or "address" property');
     process.exit(1);
 }
 
 // Function to get hiking route from GraphHopper API
 // Uses 'foot' profile (supported on free tier) which routes on paths/trails
-async function getHikingRoute(start, end, viaPoints = []) {
+// Returns object: { primary: coords, alternatives: [{coords, color, distance, time}] }
+async function getHikingRoute(currentPoint, nextPoint, viaPoints = [], options = {}) {
     // Build coordinates array: [start, via1, via2, ..., end]
-    const points = [start, ...viaPoints, end];
+    const points = [currentPoint, ...viaPoints, nextPoint];
     const pointsParam = points.map(p => `point=${p[0]},${p[1]}`).join('&');
     
     // Get API key from environment variable
     const apiKey = process.env.GRAPHHOPPER_API_KEY || '';
     // Use 'foot' profile - free tier supported, routes on pedestrian paths/trails
-    const url = `https://graphhopper.com/api/1/route?${pointsParam}&profile=foot&points_encoded=false&key=${apiKey}`;
+    // Add alternative_route.max_paths to try getting alternatives (may require paid plan)
+    const altParam = options.showAlternatives ? '&alternative_route.max_paths=3&algorithm=alternative_route' : '';
+    const url = `https://graphhopper.com/api/1/route?${pointsParam}&profile=foot&points_encoded=false&key=${apiKey}${altParam}`;
+    
+    console.log(`  GraphHopper URL: ${url.replace(apiKey, 'API_KEY')}`);
     
     try {
         const response = await fetch(url);
         const data = await response.json();
         
+        console.log(`  GraphHopper response: ${JSON.stringify({
+            pathCount: data.paths?.length || 0,
+            message: data.message,
+            hints: data.hints
+        })}`);
+        
         if (data.paths && data.paths.length > 0) {
+            // Log details of all paths returned
+            console.log(`  ✓ GraphHopper returned ${data.paths.length} path(s):`);
+            data.paths.forEach((path, i) => {
+                console.log(`    Path ${i}: ${path.points.coordinates.length} waypoints, ${(path.distance/1000).toFixed(2)}km, ${Math.round(path.time/60000)}min`);
+            });
+            
             // GraphHopper returns [lng, lat], we need [lat, lng]
-            const coords = data.paths[0].points.coordinates.map(c => [c[1], c[0]]);
-            console.log(`Hiking route found with ${coords.length} waypoints`);
-            return coords;
+            const primaryCoords = data.paths[0].points.coordinates.map(c => [c[1], c[0]]);
+            
+            const result = { primary: primaryCoords, alternatives: [] };
+            
+            // If alternatives requested, try to find nearby trails using Overpass API
+            if (options.showAlternatives) {
+                console.log(`  Requesting nearby trails from Overpass API...`);
+                const trails = await findNearbyTrailsBetween(currentPoint, nextPoint);
+                if (trails.length > 0) {
+                    result.alternatives = trails;
+                    console.log(`  ✓ Added ${trails.length} alternative trail segments`);
+                } else {
+                    console.log(`  ✗ No alternative trails found in area`);
+                }
+            }
+            
+            return result;
         } else if (data.message) {
-            console.warn('GraphHopper API:', data.message);
+            console.warn('  ✗ GraphHopper API:', data.message);
         }
     } catch (error) {
-        console.error('Error fetching hiking route:', error);
+        console.error('  ✗ Error fetching hiking route:', error.message);
     }
     
     // Fallback to OSRM foot profile
-    console.log('Falling back to OSRM foot profile...');
-    return getRouteCoordinates(start, end, 'foot', viaPoints);
+    console.log('  Falling back to OSRM foot profile...');
+    const coords = await getRouteCoordinates(currentPoint, nextPoint, 'foot', viaPoints);
+    return { primary: coords, alternatives: [] };
+}
+
+// Function to query Overpass API for hiking trails between two points
+// Returns trail segments that can be displayed as alternative routes
+async function findNearbyTrailsBetween(start, end) {
+    // Calculate bounding box and center point
+    const minLat = Math.min(start[0], end[0]) - 0.02;
+    const maxLat = Math.max(start[0], end[0]) + 0.02;
+    const minLon = Math.min(start[1], end[1]) - 0.02;
+    const maxLon = Math.max(start[1], end[1]) + 0.02;
+    
+    // Overpass query to find hiking trails in the bounding box
+    const query = `
+        [out:json][timeout:25];
+        (
+          way(${minLat},${minLon},${maxLat},${maxLon})["highway"~"^(path|footway|track)$"];
+          way(${minLat},${minLon},${maxLat},${maxLon})["sac_scale"];
+          way(${minLat},${minLon},${maxLat},${maxLon})["route"="hiking"];
+        );
+        out geom;
+    `;
+    
+    const url = 'https://overpass-api.de/api/interpreter';
+    
+    console.log(`    Querying Overpass for trails in bbox: ${minLat.toFixed(4)},${minLon.toFixed(4)} to ${maxLat.toFixed(4)},${maxLon.toFixed(4)}`);
+    
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            body: query
+        });
+        const data = await response.json();
+        
+        if (data.elements && data.elements.length > 0) {
+            console.log(`    Overpass returned ${data.elements.length} trail segments in area`);
+            
+            // Convert trail ways to coordinate arrays
+            const colors = ['#FF6B6B', '#4ECDC4', '#95E1D3', '#F38181', '#FFA07A'];
+            const trails = [];
+            
+            // Limit to first 5 trails to avoid clutter
+            const trailsToShow = Math.min(5, data.elements.length);
+            
+            for (let i = 0; i < trailsToShow; i++) {
+                const element = data.elements[i];
+                if (element.geometry && element.geometry.length > 1) {
+                    const coords = element.geometry.map(node => [node.lat, node.lon]);
+                    
+                    // Calculate approximate distance
+                    let distance = 0;
+                    for (let j = 0; j < coords.length - 1; j++) {
+                        const lat1 = coords[j][0], lon1 = coords[j][1];
+                        const lat2 = coords[j + 1][0], lon2 = coords[j + 1][1];
+                        const R = 6371000; // Earth radius in meters
+                        const dLat = (lat2 - lat1) * Math.PI / 180;
+                        const dLon = (lon2 - lon1) * Math.PI / 180;
+                        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                                Math.sin(dLon/2) * Math.sin(dLon/2);
+                        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                        distance += R * c;
+                    }
+                    
+                    trails.push({
+                        coords: coords,
+                        color: colors[i % colors.length],
+                        distance: distance,
+                        time: distance / 1.2 * 1000, // Assume 1.2 m/s hiking speed
+                        name: element.tags?.name || `Trail ${i + 1}`
+                    });
+                }
+            }
+            
+            return trails;
+        }
+    } catch (error) {
+        console.error('Error querying Overpass API:', error);
+    }
+    
+    return [];
 }
 
 // Function to query Overpass API for hiking trails near a point
@@ -257,6 +380,8 @@ for (let i = 0; i < destinationsConfig.stops.length; i++) {
     }
     
     let coords;
+    let alternativeRoutes = [];  // Track alternatives for this segment
+    
     if (stop.travelMode === 'direct') {
         // Direct line (as the crow flies) for hiking through woods
         // Interpolate points for smooth animation
@@ -274,12 +399,22 @@ for (let i = 0; i < destinationsConfig.stops.length; i++) {
     } else if (stop.travelMode === 'hike') {
         // Use GraphHopper's hiking profile (prefers trails over roads)
         const viaPoints = stop.viaPoints || [];
+        const showAlternatives = stop.showAlternatives !== undefined ? stop.showAlternatives : false;
+        
         if (viaPoints.length > 0) {
             console.log(`Getting hiking route (${stop.icon}) from "${previousLabel}" to "${stop.label || 'waypoint'}" via ${viaPoints.length} waypoints...`);
         } else {
             console.log(`Getting hiking route (${stop.icon}) from "${previousLabel}" to "${stop.label || 'waypoint'}"...`);
         }
-        coords = await getHikingRoute(currentPoint, nextPoint, viaPoints);
+        
+        const result = await getHikingRoute(currentPoint, nextPoint, viaPoints, { showAlternatives });
+        coords = result.primary;
+        
+        // Store alternatives if any
+        if (result.alternatives && result.alternatives.length > 0) {
+            alternativeRoutes = result.alternatives;
+            console.log(`  Found ${alternativeRoutes.length} alternative routes for this segment`);
+        }
     } else {
         // Use OSRM for driving, feet, etc.
         const viaPoints = stop.viaPoints || [];
@@ -316,7 +451,9 @@ for (let i = 0; i < destinationsConfig.stops.length; i++) {
         toLabel: stop.label,
         travelMode: stop.travelMode,
         showMarker: stop.label !== null,  // Only show marker if there's a label
-        zoomLevel: stop.zoomLevel || null  // null means auto-calculate
+        zoomLevel: stop.zoomLevel || null,  // null means auto-calculate
+        pause: stop.pause,  // Pause duration in seconds (undefined = default 500ms)
+        alternativeRoutes: alternativeRoutes  // Alternative trail routes with colors
     });
     
     currentPoint = nextPoint;
