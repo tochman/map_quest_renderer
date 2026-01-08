@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Map Route Editor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .nav {
+            background: white;
+            border-radius: 12px;
+            padding: 15px 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .nav-brand {
+            font-size: 24px;
+            font-weight: 700;
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .nav-link {
+            padding: 8px 16px;
+            border-radius: 6px;
+            text-decoration: none;
+            color: #666;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        
+        .nav-link:hover {
+            background: #f0f0f0;
+            color: #333;
+        }
+        
+        .nav-link.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .editor-layout {
+            display: grid;
+            grid-template-columns: 280px 1fr 400px;
+            gap: 20px;
+        }
+        
+        .editor-sidebar, .editor-main, .editor-preview {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .file-controls {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .current-file {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        
+        .current-file.unsaved {
+            color: #f44336;
+        }
+        
+        .current-file.unsaved::after {
+            content: ' ●';
+            color: #f44336;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+        }
+        
+        .btn-danger {
+            background: #f44336;
+        }
+        
+        .flex {
+            display: flex;
+            align-items: center;
+        }
+        
+        .gap-10 {
+            gap: 10px;
+        }
+        
+        h3 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        
+        .route-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .route-item {
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #f8f9fa;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .route-item:hover {
+            background: #e9ecef;
+        }
+        
+        .route-item.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .route-item-delete {
+            opacity: 0.6;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        
+        .route-item-delete:hover {
+            background: rgba(244, 67, 54, 0.2);
+            opacity: 1;
+        }
+        
+        .form-field {
+            margin-bottom: 15px;
+        }
+        
+        .form-field label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #555;
+        }
+        
+        .form-field input,
+        .form-field textarea,
+        .form-field select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: 'Poppins', sans-serif;
+            transition: border-color 0.2s;
+        }
+        
+        .form-field input:focus,
+        .form-field textarea:focus,
+        .form-field select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .form-field textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        
+        .form-field small {
+            display: block;
+            margin-top: 4px;
+            font-size: 12px;
+            color: #888;
+        }
+        
+        .stop-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .stop-item {
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .stop-item:hover {
+            background: #e9ecef;
+        }
+        
+        .stop-item-info {
+            flex: 1;
+        }
+        
+        .stop-item-label {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        
+        .stop-item-details {
+            font-size: 12px;
+            color: #888;
+        }
+        
+        .stop-item-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .stop-item-btn {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            border: none;
+            background: #667eea;
+            color: white;
+            transition: all 0.2s;
+        }
+        
+        .stop-item-btn:hover {
+            background: #5568d3;
+        }
+        
+        .stop-item-btn.danger {
+            background: #f44336;
+        }
+        
+        .stop-item-btn.danger:hover {
+            background: #da190b;
+        }
+        
+        #mapPreview {
+            width: 100%;
+            height: 400px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .preview-info {
+            font-size: 12px;
+            color: #888;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+        
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .modal-overlay.active {
+            display: flex;
+        }
+        
+        .modal {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+        }
+        
+        .modal-header {
+            margin-bottom: 20px;
+        }
+        
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #333;
+        }
+        
+        .modal-body {
+            margin-bottom: 20px;
+        }
+        
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #888;
+        }
+        
+        .card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .mb-10 {
+            margin-bottom: 10px;
+        }
+        
+        .mb-20 {
+            margin-bottom: 20px;
+        }
+        
+        .mt-10 {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav class="nav">
+            <a href="recorder.html" class="nav-brand">🗺️ Map Animation Editor</a>
+            <div class="nav-links">
+                <a href="recorder.html" class="nav-link">Recorder</a>
+                <a href="editor.html" class="nav-link active">Editor</a>
+            </div>
+        </nav>
+
+        <div class="editor-layout">
+            <!-- Sidebar: Route List -->
+            <aside class="editor-sidebar">
+                <div class="file-controls">
+                    <div class="current-file" id="currentFileDisplay">
+                        <span>📄</span>
+                        <span id="currentFileName">routes.json</span>
+                    </div>
+                    <div class="flex gap-10">
+                        <button class="btn btn-secondary btn-sm" id="openFileBtn">📂 Open</button>
+                        <button class="btn btn-secondary btn-sm" id="newFileBtn">📄 New</button>
+                    </div>
+                </div>
+                
+                <hr style="border: none; border-top: 1px solid #ddd; margin: 15px 0;">
+                
+                <div class="flex" style="justify-content: space-between; margin-bottom: 15px;">
+                    <h3 style="margin: 0;">Routes</h3>
+                    <button class="btn btn-sm" id="newRouteBtn">+</button>
+                </div>
+                <ul class="route-list" id="routeList">
+                    <!-- Populated by JS -->
+                </ul>
+            </aside>
+
+            <!-- Main: Route Editor -->
+            <main class="editor-main">
+                <div id="emptyState" class="empty-state">
+                    <div style="font-size: 48px; margin-bottom: 20px;">🗺️</div>
+                    <h3 style="color: #666; margin-bottom: 10px;">Select a Route</h3>
+                    <p>Choose a route from the sidebar to edit, or create a new one.</p>
+                </div>
+
+                <div id="routeEditor" style="display: none;">
+                    <!-- Route Info -->
+                    <div class="card">
+                        <h3>📍 Route Information</h3>
+                        <div class="form-field">
+                            <label>Route Title</label>
+                            <input type="text" id="routeTitle" placeholder="My Adventure">
+                        </div>
+                        <div class="form-field">
+                            <label>Date</label>
+                            <input type="text" id="routeDate" placeholder="December 31, 2025">
+                        </div>
+                    </div>
+
+                    <!-- Start Point -->
+                    <div class="card">
+                        <h3>🏁 Start Point</h3>
+                        <div class="form-field">
+                            <label>Address or Coordinates</label>
+                            <input type="text" id="startAddress" placeholder="Stannums Byväg 20, Lerum, Sweden">
+                            <small>Enter an address or coordinates (lat, lon)</small>
+                        </div>
+                        <div class="form-field">
+                            <label>Label</label>
+                            <input type="text" id="startLabel" placeholder="START: HOME">
+                        </div>
+                        <div class="flex gap-10">
+                            <div class="form-field" style="flex: 1;">
+                                <label>Zoom Level (10-18)</label>
+                                <input type="number" id="startZoom" value="13" min="10" max="18">
+                            </div>
+                            <div class="form-field" style="flex: 1;">
+                                <label>Pause (seconds)</label>
+                                <input type="number" id="startPause" value="1" min="0" max="10" step="0.5">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stops -->
+                    <div class="card">
+                        <div class="flex" style="justify-content: space-between; margin-bottom: 15px;">
+                            <h3 style="margin: 0;">🛑 Stops</h3>
+                            <button class="btn btn-sm" id="addStopBtn">+ Add Stop</button>
+                        </div>
+                        <ul class="stop-list" id="stopList">
+                            <!-- Populated by JS -->
+                        </ul>
+                    </div>
+
+                    <!-- Animation Settings -->
+                    <div class="card">
+                        <h3>🎬 Animation Settings</h3>
+                        <div class="form-field">
+                            <label>Total Duration (ms)</label>
+                            <input type="number" id="animDuration" value="25000" min="5000" max="120000" step="1000">
+                            <small>Total animation length in milliseconds (25000 = 25 seconds)</small>
+                        </div>
+                        <div class="form-field">
+                            <label>Line Color</label>
+                            <input type="color" id="animLineColor" value="#8B4513">
+                        </div>
+                        <div class="form-field">
+                            <label>Line Width</label>
+                            <input type="number" id="animLineWidth" value="4" min="1" max="10">
+                        </div>
+                    </div>
+
+                    <!-- Save Actions -->
+                    <div class="flex gap-10" style="justify-content: flex-end;">
+                        <button class="btn btn-secondary" id="exportJsonBtn">📋 Copy JSON</button>
+                        <button class="btn btn-secondary" id="saveAsBtn">📥 Save As...</button>
+                        <button class="btn" id="saveRouteBtn">💾 Save</button>
+                    </div>
+                </div>
+            </main>
+
+            <!-- Preview: Map -->
+            <aside class="editor-preview">
+                <h3>🗺️ Map Preview</h3>
+                <div id="mapPreview"></div>
+                <div class="preview-info" id="previewInfo">
+                    Select a route to preview on the map
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <!-- Stop Editor Modal -->
+    <div class="modal-overlay" id="stopModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="stopModalTitle">Add Stop</h3>
+            </div>
+            <div class="modal-body">
+                <div class="form-field">
+                    <label>Coordinates or Address</label>
+                    <input type="text" id="stopCoords" placeholder="57.81356, 12.1706 or Address">
+                    <small>Click on map to set coordinates</small>
+                </div>
+                <div class="form-field">
+                    <label>Label</label>
+                    <input type="text" id="stopLabel" placeholder="DESTINATION">
+                </div>
+                <div class="form-field">
+                    <label>Travel Mode</label>
+                    <select id="stopTravelMode">
+                        <option value="driving">Driving</option>
+                        <option value="hike">Hiking</option>
+                        <option value="cycling">Cycling</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label>Icon</label>
+                    <select id="stopIcon">
+                        <option value="car">🚗 Car</option>
+                        <option value="motorcycle">🏍️ Motorcycle</option>
+                        <option value="backpacker">🎒 Backpacker</option>
+                        <option value="person">🚶 Person</option>
+                    </select>
+                </div>
+                <div class="flex gap-10">
+                    <div class="form-field" style="flex: 1;">
+                        <label>Zoom Level</label>
+                        <input type="number" id="stopZoom" value="14" min="10" max="18">
+                    </div>
+                    <div class="form-field" style="flex: 1;">
+                        <label>Pause (sec)</label>
+                        <input type="number" id="stopPause" value="1" min="0" max="10" step="0.5">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="stopModalCancel">Cancel</button>
+                <button class="btn" id="stopModalSave">Save Stop</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div class="modal-overlay" id="confirmModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="confirmModalTitle">Confirm</h3>
+            </div>
+            <div class="modal-body" id="confirmModalBody">
+                Are you sure?
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="confirmModalCancel">Cancel</button>
+                <button class="btn btn-danger" id="confirmModalConfirm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/editor.js"></script>
+</body>
+</html>

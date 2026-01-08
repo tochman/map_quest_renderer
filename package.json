@@ -8,7 +8,10 @@
     "preview": "node animate.js",
     "animate": "node animate.js",
     "render": "node animate-frames.js",
-    "frames": "node animate-frames.js"
+    "frames": "node animate-frames.js",
+    "recorder": "vite --open recorder.html",
+    "editor": "vite --open editor.html",
+    "dev": "vite"
   },
   "keywords": [
     "puppeteer",
@@ -19,6 +22,10 @@
   "license": "ISC",
   "dependencies": {
     "dotenv": "^17.2.3",
-    "puppeteer": "^24.34.0"
+    "puppeteer": "^24.34.0",
+    "socket.io-client": "^4.8.3"
+  },
+  "devDependencies": {
+    "vite": "^7.3.1"
   }
 }

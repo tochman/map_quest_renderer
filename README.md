@@ -1,6 +1,15 @@
-# Map Animation with Puppeteer
+# Map Animation Studio
 
-Creates Indiana Jones style animated map routes using Puppeteer and Leaflet.
+Creates Indiana Jones style animated map routes with browser-based recording and editing tools.
+
+## Features
+
+- 🎬 **Browser-based Recording** - Record animations directly in your browser using MediaRecorder API
+- 🗺️ **Visual Route Editor** - Drag-and-drop interface for creating and editing routes
+- 💾 **Multiple Export Formats** - WebM (instant) or MP4 (cloud conversion via FreeConvert API)
+- 📊 **Quality Presets** - Ultra, High, Medium, and Low quality options
+- 🎨 **Real-time Preview** - See your route on an interactive map while editing
+- ⚡ **Legacy Puppeteer Support** - Frame-by-frame rendering still available
 
 ## Installation
 
@@ -8,11 +17,51 @@ Creates Indiana Jones style animated map routes using Puppeteer and Leaflet.
 npm install
 ```
 
+## Quick Start
+
+### 1. Route Editor (Recommended)
+
+Create and edit routes with a visual interface:
+
+```bash
+npm run editor
+```
+
+Opens the route editor at http://localhost:5173/editor.html where you can:
+- Create new routes or edit existing JSON files
+- Add/remove stops with map preview
+- Set travel modes (driving, hiking, cycling)
+- Configure animation settings
+- Export routes for recording
+
+### 2. Browser Recording (New!)
+
+Record animations directly in your browser:
+
+```bash
+npm run recorder
+```
+
+Opens the recorder at http://localhost:5173/recorder.html where you can:
+- Select a route from the dropdown
+- Choose format (MP4 or WebM) and quality
+- Click "Start Recording" and select the map window
+- Stop when animation completes
+- Download instantly (WebM) or convert to MP4 (requires API key)
+
+**Note:** For MP4 conversion, add your FreeConvert API key to `.env`:
+```bash
+VITE_FREE_CONVERT_API_KEY=your_api_key_here
+```
+Get a free API key at: https://www.freeconvert.com/account/api-tokens
+
+### 3. Legacy Puppeteer Mode
+
 ## Usage
 
-### Preview Mode (Recommended First Step)
+### Legacy: Preview Mode
 
-Preview your animation in a browser window before rendering:
+Preview your animation in a browser window before rendering (old method):
 
 ```bash
 # Preview with default destinations.json
@@ -29,9 +78,9 @@ The browser stays open after playback so you can inspect the result.
 
 ### Render to Video
 
-When happy with the preview, render to MP4:
+WhenLegacy: Render to Video
 
-```bash
+When happy with the preview, render to MP4 (old method)
 # Render with default destinations.json
 npm run render
 

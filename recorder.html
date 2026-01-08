@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Map Animation Recorder</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/map-styles.css" />
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .nav {
+            background: white;
+            border-radius: 12px;
+            padding: 15px 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .nav-brand {
+            font-size: 24px;
+            font-weight: 700;
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .nav-link {
+            padding: 8px 16px;
+            border-radius: 6px;
+            text-decoration: none;
+            color: #666;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        
+        .nav-link:hover {
+            background: #f0f0f0;
+            color: #333;
+        }
+        
+        .nav-link.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .canvas-wrapper {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+        }
+        
+        #map {
+            width: 100%;
+            height: 600px;
+            border-radius: 8px;
+            position: relative;
+        }
+        
+        .controls {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .control-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        select, .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+        }
+        
+        select {
+            background: #f8f8f8;
+            border: 2px solid #e0e0e0;
+        }
+        
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn-primary {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            background: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
+        }
+        
+        .btn-danger {
+            background: #f44336;
+            color: white;
+        }
+        
+        .btn-danger:hover:not(:disabled) {
+            background: #da190b;
+        }
+        
+        .btn-info {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-info:hover:not(:disabled) {
+            background: #5568d3;
+        }
+        
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: 6px;
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            background: white;
+            border-radius: 12px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-align: center;
+            font-size: 16px;
+            font-weight: 500;
+            color: #333;
+        }
+        
+        .status.recording {
+            background: linear-gradient(135deg, #f44336 0%, #e91e63 100%);
+            color: white;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        .status.converting {
+            background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+            color: white;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+        
+        .progress-container {
+            display: none;
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+        }
+        
+        .progress-container.active {
+            display: block;
+        }
+        
+        .progress-header {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .progress-spinner {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            flex-shrink: 0;
+        }
+        
+        .progress-spinner svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+        
+        .progress-spinner-track {
+            fill: none;
+            stroke: #e0e0e0;
+            stroke-width: 4;
+        }
+        
+        .progress-spinner-fill {
+            fill: none;
+            stroke: url(#progressGradient);
+            stroke-width: 4;
+            stroke-linecap: round;
+            stroke-dasharray: 126;
+            stroke-dashoffset: 126;
+            transition: stroke-dashoffset 0.3s ease;
+        }
+        
+        .progress-spinner-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 18px;
+            font-weight: 700;
+            color: #667eea;
+        }
+        
+        .progress-info {
+            flex: 1;
+        }
+        
+        .progress-label {
+            font-size: 20px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .progress-sublabel {
+            font-size: 14px;
+            color: #888;
+        }
+        
+        .progress-bar-wrapper {
+            position: relative;
+            margin-bottom: 20px;
+        }
+        
+        .progress-bar {
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #8BC34A, #CDDC39);
+            width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 4px;
+        }
+        
+        .progress-bar-glow {
+            position: absolute;
+            top: -10px;
+            left: 0;
+            right: 0;
+            height: 28px;
+            background: linear-gradient(90deg, transparent, rgba(76, 175, 80, 0.3), transparent);
+            filter: blur(10px);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .progress-bar-wrapper.active .progress-bar-glow {
+            opacity: 1;
+        }
+        
+        .progress-stages {
+            display: flex;
+            justify-content: space-around;
+            gap: 10px;
+        }
+        
+        .progress-stage {
+            flex: 1;
+            text-align: center;
+            padding: 15px;
+            border-radius: 8px;
+            background: #f8f8f8;
+            transition: all 0.3s ease;
+        }
+        
+        .progress-stage.active {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            transform: scale(1.05);
+        }
+        
+        .progress-stage-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+        
+        .progress-stage-label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .info {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .info h3 {
+            color: #667eea;
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+        
+        .info ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        
+        .info li {
+            margin: 5px 0;
+            color: #555;
+        }
+        
+        .source-file {
+            font-size: 12px;
+            color: #888;
+            padding: 4px 8px;
+            background: #f0f0f0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav class="nav">
+            <a href="recorder.html" class="nav-brand">🗺️ Map Animation Recorder</a>
+            <div class="nav-links">
+                <a href="recorder.html" class="nav-link active">Recorder</a>
+                <a href="editor.html" class="nav-link">Editor</a>
+            </div>
+        </nav>
+        
+        <div class="canvas-wrapper">
+            <div id="map"></div>
+            <div id="parchment-overlay"></div>
+            <div id="title-card"></div>
+            <div id="destination-card"><div class="destination-text"></div></div>
+            <div id="compass">
+                <svg viewBox="0 0 200 200">
+                    <circle cx="100" cy="100" r="98" fill="none" stroke="#3d2817" stroke-width="2"/>
+                    <circle cx="100" cy="100" r="90" fill="#f4e8d0" stroke="#8B4513" stroke-width="3"/>
+                    <circle cx="100" cy="100" r="82" fill="none" stroke="#8B4513" stroke-width="1.5" stroke-dasharray="5,3"/>
+                    <line x1="100" y1="12" x2="100" y2="30" stroke="#8B0000" stroke-width="4" stroke-linecap="round"/>
+                    <line x1="100" y1="170" x2="100" y2="188" stroke="#3d2817" stroke-width="3" stroke-linecap="round"/>
+                    <line x1="12" y1="100" x2="30" y2="100" stroke="#3d2817" stroke-width="3" stroke-linecap="round"/>
+                    <line x1="170" y1="100" x2="188" y2="100" stroke="#3d2817" stroke-width="3" stroke-linecap="round"/>
+                    <line x1="32" y1="32" x2="42" y2="42" stroke="#666" stroke-width="2"/>
+                    <line x1="168" y1="32" x2="158" y2="42" stroke="#666" stroke-width="2"/>
+                    <line x1="32" y1="168" x2="42" y2="158" stroke="#666" stroke-width="2"/>
+                    <line x1="168" y1="168" x2="158" y2="158" stroke="#666" stroke-width="2"/>
+                    <text x="100" y="25" text-anchor="middle" font-size="32" font-family="serif" font-weight="bold" fill="#8B0000" stroke="#f4e8d0" stroke-width="0.5">N</text>
+                    <text x="100" y="183" text-anchor="middle" font-size="22" font-family="serif" font-weight="bold" fill="#3d2817">S</text>
+                    <text x="178" y="107" text-anchor="middle" font-size="22" font-family="serif" font-weight="bold" fill="#3d2817">E</text>
+                    <text x="22" y="107" text-anchor="middle" font-size="22" font-family="serif" font-weight="bold" fill="#3d2817">W</text>
+                    <text x="150" y="55" text-anchor="middle" font-size="14" font-family="serif" fill="#666">NE</text>
+                    <text x="150" y="155" text-anchor="middle" font-size="14" font-family="serif" fill="#666">SE</text>
+                    <text x="50" y="155" text-anchor="middle" font-size="14" font-family="serif" fill="#666">SW</text>
+                    <text x="50" y="55" text-anchor="middle" font-size="14" font-family="serif" fill="#666">NW</text>
+                    <polygon points="100,18 103,35 100,32 97,35" fill="#8B0000" stroke="#3d2817" stroke-width="1"/>
+                    <polygon points="100,182 97,165 100,168 103,165" fill="#d4c5a9" stroke="#3d2817" stroke-width="1"/>
+                    <circle cx="100" cy="100" r="12" fill="#3d2817" stroke="#8B4513" stroke-width="2"/>
+                    <circle cx="100" cy="100" r="6" fill="#f4e8d0"/>
+                    <circle cx="100" cy="100" r="3" fill="#8B4513"/>
+                </svg>
+            </div>
+            <div id="date-stamp"></div>
+            <div id="motorcycle" style="display:none;"></div>
+            <div id="person" style="display:none;"></div>
+            <div id="car" style="display:none;"></div>
+            <div id="backpacker" style="display:none;"></div>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="routeSelect">Route:</label>
+                <select id="routeSelect">
+                    <option value="">Loading...</option>
+                </select>
+            </div>
+            <button id="reloadBtn" class="btn btn-small" title="Reload routes from editor">🔄</button>
+            <span class="source-file" id="sourceFile"></span>
+            
+            <div style="flex: 1"></div>
+            
+            <div class="control-group">
+                <label for="formatSelect">Format:</label>
+                <select id="formatSelect">
+                    <option value="mp4">MP4 (H.264) - Best compatibility</option>
+                    <option value="webm">WebM (VP9) - Smaller size</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="qualitySelect">Quality:</label>
+                <select id="qualitySelect">
+                    <option value="low">Low - Fastest</option>
+                    <option value="medium" selected>Medium - Balanced</option>
+                    <option value="high">High - Better quality</option>
+                    <option value="ultra">Ultra - Best quality (slow)</option>
+                </select>
+            </div>
+            <button id="startBtn" class="btn btn-primary">▶️ Start Recording</button>
+            <button id="stopBtn" class="btn btn-danger" disabled>⏹️ Stop Recording</button>
+            <button id="downloadBtn" class="btn btn-info" disabled>💾 Download Video</button>
+        </div>
+
+        <div class="status" id="status">
+            Ready to record
+        </div>
+        
+        <div class="progress-container" id="progressContainer">
+            <svg width="0" height="0" style="position: absolute;">
+                <defs>
+                    <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" style="stop-color:#4CAF50"/>
+                        <stop offset="50%" style="stop-color:#8BC34A"/>
+                        <stop offset="100%" style="stop-color:#CDDC39"/>
+                    </linearGradient>
+                </defs>
+            </svg>
+            
+            <div class="progress-header">
+                <div class="progress-spinner">
+                    <svg viewBox="0 0 44 44">
+                        <circle class="progress-spinner-track" cx="22" cy="22" r="20"/>
+                        <circle class="progress-spinner-fill" id="progressSpinnerFill" cx="22" cy="22" r="20"/>
+                    </svg>
+                    <div class="progress-spinner-text" id="progressPercent">0%</div>
+                </div>
+                <div class="progress-info">
+                    <div class="progress-label" id="progressLabel">Preparing...</div>
+                    <div class="progress-sublabel" id="progressSublabel">Initializing encoder</div>
+                </div>
+            </div>
+            
+            <div class="progress-bar-wrapper" id="progressBarWrapper">
+                <div class="progress-bar-glow" id="progressBarGlow"></div>
+                <div class="progress-bar">
+                    <div class="progress-bar-fill" id="progressBarFill"></div>
+                </div>
+            </div>
+            
+            <div class="progress-stages">
+                <div class="progress-stage" id="stageLoad">
+                    <div class="progress-stage-icon">📦</div>
+                    <div class="progress-stage-label">Load</div>
+                </div>
+                <div class="progress-stage" id="stageEncode">
+                    <div class="progress-stage-icon">🎬</div>
+                    <div class="progress-stage-label">Encode</div>
+                </div>
+                <div class="progress-stage" id="stageFinalize">
+                    <div class="progress-stage-icon">✨</div>
+                    <div class="progress-stage-label">Finalize</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="info">
+            <h3>📝 Instructions:</h3>
+            <ul>
+                <li>Select a route from the dropdown (or create one in the Editor)</li>
+                <li>Choose your preferred <strong>format</strong> (MP4 or WebM)</li>
+                <li>Select <strong>quality</strong> based on your needs</li>
+                <li>Click <strong>Start Recording</strong> to begin capturing the map animation</li>
+                <li>Click <strong>Stop Recording</strong> when animation completes</li>
+                <li>MP4 conversion requires FreeConvert API key in .env file</li>
+            </ul>
+            <h3>📊 Quality Guide:</h3>
+            <ul>
+                <li><strong>Ultra</strong> - Best quality, largest file (~15 Mbps)</li>
+                <li><strong>High</strong> - Great quality, large file (~8 Mbps)</li>
+                <li><strong>Medium</strong> - Good balance of quality and size (~5 Mbps)</li>
+                <li><strong>Low</strong> - Smaller file, acceptable quality (~2.5 Mbps)</li>
+            </ul>
+        </div>
+    </div>
+
+    <script type="module" src="js/recorder.js"></script>
+</body>
+</html>
