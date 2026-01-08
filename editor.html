@@ -14,147 +14,154 @@
             padding: 0;
         }
         
-        body {
+        html, body {
+            height: 100%;
             font-family: 'Poppins', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
+            background: #2c3e50;
         }
         
-        .container {
-            max-width: 1600px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        
-        .nav {
-            background: white;
-            border-radius: 3px;
-            padding: 15px 25px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        .editor-container {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-direction: column;
+            height: 100vh;
         }
         
-        .nav-brand {
-            font-size: 24px;
-            font-weight: 700;
-            color: #667eea;
-            text-decoration: none;
-        }
-        
-        .nav-links {
+        /* Top controls bar - matching recorder */
+        .editor-controls {
+            background: #34495e;
+            padding: 10px 20px;
             display: flex;
+            flex-wrap: wrap;
             gap: 15px;
+            align-items: center;
+            z-index: 3000;
+            border-bottom: 2px solid #2c3e50;
+        }
+        
+        .brand {
+            font-weight: 700;
+            font-size: 16px;
+            color: #ecf0f1;
+            margin-right: 20px;
         }
         
         .nav-link {
-            padding: 8px 16px;
-            border-radius: 3px;
+            color: #bdc3c7;
             text-decoration: none;
-            color: #666;
-            font-weight: 500;
+            font-size: 13px;
+            padding: 8px 15px;
+            border-radius: 3px;
             transition: all 0.2s;
         }
         
         .nav-link:hover {
-            background: #f0f0f0;
-            color: #333;
-        }
-        
-        .nav-link.active {
-            background: #667eea;
+            background: rgba(255,255,255,0.1);
             color: white;
         }
         
-        .editor-layout {
-            display: grid;
-            grid-template-columns: 280px 1fr 400px;
-            gap: 20px;
+        .nav-link.active {
+            background: #3498db;
+            color: white;
         }
         
-        .editor-sidebar, .editor-main, .editor-preview {
-            background: white;
-            border-radius: 3px;
-            padding: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        .spacer { flex: 1; }
+        
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         
-        .file-controls {
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 3px;
-            margin-bottom: 15px;
+        .control-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #bdc3c7;
+            text-transform: uppercase;
         }
+        
+        .control-group select {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 3px;
+            background: #2c3e50;
+            color: white;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        
+        .control-group select:focus {
+            outline: 2px solid #3498db;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 3px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary { background: #27ae60; color: white; }
+        .btn-primary:hover:not(:disabled) { background: #2ecc71; }
+        
+        .btn-secondary { background: #7f8c8d; color: white; }
+        .btn-secondary:hover:not(:disabled) { background: #95a5a6; }
+        
+        .btn-danger { background: #e74c3c; color: white; }
+        .btn-danger:hover:not(:disabled) { background: #c0392b; }
+        
+        .btn-info { background: #3498db; color: white; }
+        .btn-info:hover:not(:disabled) { background: #2980b9; }
+        
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+        
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
         
         .current-file {
             display: flex;
             align-items: center;
             gap: 8px;
-            font-size: 14px;
-            color: #333;
-            font-weight: 600;
-            margin-bottom: 10px;
+            font-size: 13px;
+            color: #ecf0f1;
+            padding: 8px 15px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 3px;
         }
         
         .current-file.unsaved {
-            color: #f44336;
+            color: #e74c3c;
         }
         
         .current-file.unsaved::after {
             content: ' ●';
-            color: #f44336;
+            color: #e74c3c;
         }
         
-        .btn {
-            padding: 10px 20px;
-            border-radius: 3px;
+        /* Main content area */
+        .editor-content {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 280px 1fr 360px;
+            gap: 0;
+            overflow: hidden;
+        }
+        
+        /* Sidebar panels */
+        .editor-sidebar {
+            background: #3d5266;
+            padding: 20px;
+            overflow-y: auto;
+            border-right: 2px solid #2c3e50;
+        }
+        
+        .editor-sidebar h3 {
             font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            border: none;
-            background: #667eea;
-            color: white;
-        }
-        
-        .btn:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
-        }
-        
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        
-        .btn-sm {
-            padding: 6px 12px;
-            font-size: 12px;
-        }
-        
-        .btn-secondary {
-            background: #6c757d;
-        }
-        
-        .btn-danger {
-            background: #f44336;
-        }
-        
-        .flex {
-            display: flex;
-            align-items: center;
-        }
-        
-        .gap-10 {
-            gap: 10px;
-        }
-        
-        h3 {
-            font-size: 18px;
+            color: #ecf0f1;
             margin-bottom: 15px;
-            color: #333;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
         
         .route-list {
@@ -163,23 +170,25 @@
         }
         
         .route-item {
-            padding: 12px;
+            padding: 12px 15px;
             border-radius: 3px;
             margin-bottom: 8px;
             cursor: pointer;
             transition: all 0.2s;
-            background: #f8f9fa;
+            background: #2c3e50;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            color: #bdc3c7;
         }
         
         .route-item:hover {
-            background: #e9ecef;
+            background: #4a6278;
+            color: #ecf0f1;
         }
         
         .route-item.active {
-            background: #667eea;
+            background: #3498db;
             color: white;
         }
         
@@ -187,43 +196,85 @@
             opacity: 0.6;
             cursor: pointer;
             padding: 4px 8px;
-            border-radius: 4px;
+            border-radius: 3px;
+            font-size: 12px;
         }
         
         .route-item-delete:hover {
-            background: rgba(244, 67, 54, 0.2);
+            background: rgba(231, 76, 60, 0.3);
             opacity: 1;
         }
         
+        /* Main editor area */
+        .editor-main {
+            background: #2c3e50;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #7f8c8d;
+        }
+        
+        .empty-state h3 {
+            color: #bdc3c7;
+            margin-bottom: 10px;
+        }
+        
+        /* Cards */
+        .card {
+            background: #34495e;
+            border-radius: 3px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .card h3 {
+            font-size: 16px;
+            color: #ecf0f1;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #4a6278;
+        }
+        
+        /* Form fields */
         .form-field {
             margin-bottom: 15px;
         }
         
         .form-field label {
             display: block;
-            margin-bottom: 5px;
-            font-size: 13px;
+            margin-bottom: 8px;
+            font-size: 12px;
             font-weight: 600;
-            color: #555;
+            color: #bdc3c7;
+            text-transform: uppercase;
         }
         
         .form-field input,
         .form-field textarea,
         .form-field select {
             width: 100%;
-            padding: 10px;
-            border: 2px solid #e0e0e0;
+            padding: 10px 12px;
+            border: none;
             border-radius: 3px;
+            background: #2c3e50;
+            color: #ecf0f1;
             font-size: 14px;
             font-family: 'Poppins', sans-serif;
-            transition: border-color 0.2s;
+            transition: all 0.2s;
         }
         
         .form-field input:focus,
         .form-field textarea:focus,
         .form-field select:focus {
-            outline: none;
-            border-color: #667eea;
+            outline: 2px solid #3498db;
+        }
+        
+        .form-field input::placeholder {
+            color: #7f8c8d;
         }
         
         .form-field textarea {
@@ -233,19 +284,26 @@
         
         .form-field small {
             display: block;
-            margin-top: 4px;
-            font-size: 12px;
-            color: #888;
+            margin-top: 6px;
+            font-size: 11px;
+            color: #7f8c8d;
         }
         
+        .form-field input[type="color"] {
+            padding: 4px;
+            height: 40px;
+            cursor: pointer;
+        }
+        
+        /* Stop list */
         .stop-list {
             list-style: none;
             padding: 0;
         }
         
         .stop-item {
-            padding: 12px;
-            background: #f8f9fa;
+            padding: 12px 15px;
+            background: #2c3e50;
             border-radius: 3px;
             margin-bottom: 8px;
             display: flex;
@@ -256,7 +314,7 @@
         }
         
         .stop-item:hover {
-            background: #e9ecef;
+            background: #4a6278;
         }
         
         .stop-item-info {
@@ -265,13 +323,13 @@
         
         .stop-item-label {
             font-weight: 600;
-            color: #333;
+            color: #ecf0f1;
             margin-bottom: 4px;
         }
         
         .stop-item-details {
             font-size: 12px;
-            color: #888;
+            color: #7f8c8d;
         }
         
         .stop-item-actions {
@@ -280,54 +338,83 @@
         }
         
         .stop-item-btn {
-            padding: 4px 8px;
-            border-radius: 4px;
+            padding: 4px 10px;
+            border-radius: 3px;
             font-size: 12px;
             cursor: pointer;
             border: none;
-            background: #667eea;
+            background: #3498db;
             color: white;
             transition: all 0.2s;
         }
         
         .stop-item-btn:hover {
-            background: #5568d3;
+            background: #2980b9;
         }
         
         .stop-item-btn.danger {
-            background: #f44336;
+            background: #e74c3c;
         }
         
         .stop-item-btn.danger:hover {
-            background: #da190b;
+            background: #c0392b;
+        }
+        
+        /* Preview sidebar */
+        .editor-preview {
+            background: #3d5266;
+            padding: 20px;
+            overflow-y: auto;
+            border-left: 2px solid #2c3e50;
+        }
+        
+        .editor-preview h3 {
+            font-size: 14px;
+            color: #ecf0f1;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
         
         #mapPreview {
             width: 100%;
-            height: 400px;
+            height: 350px;
             border-radius: 3px;
             margin-bottom: 15px;
         }
         
         .preview-info {
             font-size: 12px;
-            color: #888;
-            padding: 10px;
-            background: #f8f9fa;
+            color: #7f8c8d;
+            padding: 15px;
+            background: #2c3e50;
             border-radius: 3px;
         }
         
+        /* Flex utilities */
+        .flex {
+            display: flex;
+            align-items: center;
+        }
+        
+        .gap-10 { gap: 10px; }
+        
+        .mb-10 { margin-bottom: 10px; }
+        .mb-20 { margin-bottom: 20px; }
+        .mt-10 { margin-top: 10px; }
+        
+        /* Modal */
         .modal-overlay {
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
+            background: rgba(0, 0, 0, 0.7);
             display: none;
             align-items: center;
             justify-content: center;
-            z-index: 1000;
+            z-index: 5000;
         }
         
         .modal-overlay.active {
@@ -335,12 +422,12 @@
         }
         
         .modal {
-            background: white;
+            background: #34495e;
             border-radius: 3px;
             padding: 30px;
             max-width: 500px;
             width: 90%;
-            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
         }
         
         .modal-header {
@@ -350,7 +437,7 @@
         .modal-title {
             font-size: 20px;
             font-weight: 700;
-            color: #333;
+            color: #ecf0f1;
         }
         
         .modal-body {
@@ -362,62 +449,37 @@
             justify-content: flex-end;
             gap: 10px;
         }
-        
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #888;
-        }
-        
-        .card {
-            background: #f8f9fa;
-            border-radius: 3px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-        
-        .mb-10 {
-            margin-bottom: 10px;
-        }
-        
-        .mb-20 {
-            margin-bottom: 20px;
-        }
-        
-        .mt-10 {
-            margin-top: 10px;
-        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <nav class="nav">
-            <a href="recorder.html" class="nav-brand">🗺️ Map Animation Editor</a>
-            <div class="nav-links">
-                <a href="recorder.html" class="nav-link">Recorder</a>
-                <a href="editor.html" class="nav-link active">Editor</a>
+    <div class="editor-container">
+        <!-- Controls Bar -->
+        <div class="editor-controls">
+            <span class="brand">🗺️ Map Editor</span>
+            <a href="recorder.html" class="nav-link">Recorder</a>
+            <a href="editor.html" class="nav-link active">Editor</a>
+            
+            <div class="spacer"></div>
+            
+            <div class="current-file" id="currentFileDisplay">
+                <span>📄</span>
+                <span id="currentFileName">routes.json</span>
             </div>
-        </nav>
-
-        <div class="editor-layout">
+            
+            <button class="btn btn-secondary btn-sm" id="openFileBtn">📂 Open</button>
+            <button class="btn btn-secondary btn-sm" id="newFileBtn">📄 New</button>
+            <button class="btn btn-secondary btn-sm" id="exportJsonBtn">📋 Copy JSON</button>
+            <button class="btn btn-secondary btn-sm" id="saveAsBtn">📥 Save As</button>
+            <button class="btn btn-primary btn-sm" id="saveRouteBtn">💾 Save</button>
+        </div>
+        
+        <!-- Main Content Area -->
+        <div class="editor-content">
             <!-- Sidebar: Route List -->
             <aside class="editor-sidebar">
-                <div class="file-controls">
-                    <div class="current-file" id="currentFileDisplay">
-                        <span>📄</span>
-                        <span id="currentFileName">routes.json</span>
-                    </div>
-                    <div class="flex gap-10">
-                        <button class="btn btn-secondary btn-sm" id="openFileBtn">📂 Open</button>
-                        <button class="btn btn-secondary btn-sm" id="newFileBtn">📄 New</button>
-                    </div>
-                </div>
-                
-                <hr style="border: none; border-top: 1px solid #ddd; margin: 15px 0;">
-                
                 <div class="flex" style="justify-content: space-between; margin-bottom: 15px;">
                     <h3 style="margin: 0;">Routes</h3>
-                    <button class="btn btn-sm" id="newRouteBtn">+</button>
+                    <button class="btn btn-primary btn-sm" id="newRouteBtn">+</button>
                 </div>
                 <ul class="route-list" id="routeList">
                     <!-- Populated by JS -->
@@ -428,7 +490,7 @@
             <main class="editor-main">
                 <div id="emptyState" class="empty-state">
                     <div style="font-size: 48px; margin-bottom: 20px;">🗺️</div>
-                    <h3 style="color: #666; margin-bottom: 10px;">Select a Route</h3>
+                    <h3>Select a Route</h3>
                     <p>Choose a route from the sidebar to edit, or create a new one.</p>
                 </div>
 
@@ -473,8 +535,8 @@
                     <!-- Stops -->
                     <div class="card">
                         <div class="flex" style="justify-content: space-between; margin-bottom: 15px;">
-                            <h3 style="margin: 0;">🛑 Stops</h3>
-                            <button class="btn btn-sm" id="addStopBtn">+ Add Stop</button>
+                            <h3 style="margin: 0; border: none; padding: 0;">🛑 Stops</h3>
+                            <button class="btn btn-primary btn-sm" id="addStopBtn">+ Add Stop</button>
                         </div>
                         <ul class="stop-list" id="stopList">
                             <!-- Populated by JS -->
@@ -497,13 +559,6 @@
                             <label>Line Width</label>
                             <input type="number" id="animLineWidth" value="4" min="1" max="10">
                         </div>
-                    </div>
-
-                    <!-- Save Actions -->
-                    <div class="flex gap-10" style="justify-content: flex-end;">
-                        <button class="btn btn-secondary" id="exportJsonBtn">📋 Copy JSON</button>
-                        <button class="btn btn-secondary" id="saveAsBtn">📥 Save As...</button>
-                        <button class="btn" id="saveRouteBtn">💾 Save</button>
                     </div>
                 </div>
             </main>
@@ -565,7 +620,7 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="stopModalCancel">Cancel</button>
-                <button class="btn" id="stopModalSave">Save Stop</button>
+                <button class="btn btn-primary" id="stopModalSave">Save Stop</button>
             </div>
         </div>
     </div>
@@ -582,6 +637,20 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="confirmModalCancel">Cancel</button>
                 <button class="btn btn-danger" id="confirmModalConfirm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Modal -->
+    <div class="modal-overlay" id="alertModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="alertModalTitle">Notice</h3>
+            </div>
+            <div class="modal-body" id="alertModalBody">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" id="alertModalOk">OK</button>
             </div>
         </div>
     </div>

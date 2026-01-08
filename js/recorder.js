@@ -1,387 +1,815 @@
-import { io } from 'socket.io-client';
-import html2canvas from 'html2canvas';
+/**
+ * Map Animation Recorder UI
+ * Preview animation and trigger Puppeteer recording via server API
+ * Outputs WebM, with optional FreeConvert MP4 conversion
+ */
 
-// Get API key from environment
+// FreeConvert API
 const FREE_CONVERT_API_KEY = import.meta.env.VITE_FREE_CONVERT_API_KEY;
 const FREE_CONVERT_API_URL = 'https://api.freeconvert.com/v1';
 
-// Quality presets
-const qualityPresets = {
-    ultra: { label: 'Ultra', bitrate: 15000000, video_codec: 'libx264', crf: 17 },
-    high: { label: 'High', bitrate: 8000000, video_codec: 'libx264', crf: 20 },
-    medium: { label: 'Medium', bitrate: 5000000, video_codec: 'libx264', crf: 23 },
-    low: { label: 'Low', bitrate: 2500000, video_codec: 'libx264', crf: 28 }
-};
-
-// Tile layer configurations
+// Tile layer configurations (must match server.js)
 const TILE_LAYERS = {
-    osm: { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', options: { maxZoom: 19 } },
+    osm: { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', options: { maxZoom: 19, subdomains: 'abc' } },
     watercolor: { url: 'https://watercolormaps.collection.cooperhewitt.org/tile/watercolor/{z}/{x}/{y}.jpg', options: { maxZoom: 15 } },
     terrain: { url: 'https://tile.opentopomap.org/{z}/{x}/{y}.png', options: { maxZoom: 17 } },
     toner: { url: 'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', options: { maxZoom: 20 } },
     dark: { url: 'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', options: { maxZoom: 20 } },
-    voyager: { url: 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png', options: { maxZoom: 20 } }
+    voyager: { url: 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png', options: { maxZoom: 20 } },
+    humanitarian: { url: 'https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', options: { maxZoom: 19 } }
 };
 
 // DOM Elements
-const routeSelect = document.getElementById('routeSelect');
-const reloadBtn = document.getElementById('reloadBtn');
-const fromEditorBtn = document.getElementById('fromEditorBtn');
-const sourceFile = document.getElementById('sourceFile');
-const formatSelect = document.getElementById('formatSelect');
-const qualitySelect = document.getElementById('qualitySelect');
-const startBtn = document.getElementById('startBtn');
-const stopBtn = document.getElementById('stopBtn');
-const downloadBtn = document.getElementById('downloadBtn');
-const statusDiv = document.getElementById('status');
-const progressContainer = document.getElementById('progressContainer');
-const progressPercent = document.getElementById('progressPercent');
-const progressLabel = document.getElementById('progressLabel');
-const progressSublabel = document.getElementById('progressSublabel');
-const progressBarFill = document.getElementById('progressBarFill');
-const progressSpinnerFill = document.getElementById('progressSpinnerFill');
-const progressBarWrapper = document.getElementById('progressBarWrapper');
-const stageLoad = document.getElementById('stageLoad');
-const stageEncode = document.getElementById('stageEncode');
-const stageFinalize = document.getElementById('stageFinalize');
-const mapWrapper = document.getElementById('mapWrapper');
+let routeSelect, tileSelect, reloadBtn, previewBtn, recordBtn, downloadBtn, statusEl;
+let progressContainer, progressBarFill, progressLabel, progressSublabel, progressPercent, progressSpinnerFill;
+let stageLoad, stageEncode, stageFinalize;
+
+// Download modal elements
+let downloadModal, downloadWebmBtn, downloadMp4Btn, mp4Options, mp4Quality, mp4Codec, confirmMp4Btn, closeDownloadModal;
+
+// Alert/Confirm modal elements
+let alertModal, alertModalTitle, alertModalMessage, alertModalOk, alertModalCancel;
+let alertResolve = null; // Promise resolver for confirm dialogs
+
+// Map elements
+let elements = {};
 
 // State
 let routes = [];
 let currentRoute = null;
 let currentRouteData = null;
-let mediaRecorder = null;
-let recordedChunks = [];
-let isRecording = false;
-let isConverting = false;
-let startTime = null;
-let currentSocket = null;
+let routeSegments = [];
 let map = null;
-let captureInterval = null;
-let recordingCanvas = null;
-let recordingCtx = null;
+let isPreviewRunning = false;
+let pollInterval = null;
+let currentWebmBlob = null; // Store WebM blob for conversion
+let recordingStartTime = null; // Track recording start time for elapsed display
+let isRecordingMode = false; // Track if we're in recording vs converting mode
 
 // Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    routeSelect = document.getElementById('routeSelect');
+    tileSelect = document.getElementById('tileSelect');
+    reloadBtn = document.getElementById('reloadBtn');
+    previewBtn = document.getElementById('previewBtn');
+    recordBtn = document.getElementById('recordBtn');
+    downloadBtn = document.getElementById('downloadBtn');
+    statusEl = document.getElementById('status');
+    
+    // Progress UI elements
+    progressContainer = document.getElementById('progressContainer');
+    progressBarFill = document.getElementById('progressBarFill');
+    progressLabel = document.getElementById('progressLabel');
+    progressSublabel = document.getElementById('progressSublabel');
+    progressPercent = document.getElementById('progressPercent');
+    progressSpinnerFill = document.getElementById('progressSpinnerFill');
+    stageLoad = document.getElementById('stageLoad');
+    stageEncode = document.getElementById('stageEncode');
+    stageFinalize = document.getElementById('stageFinalize');
+    
+    // Download modal elements
+    downloadModal = document.getElementById('downloadModal');
+    downloadWebmBtn = document.getElementById('downloadWebmBtn');
+    downloadMp4Btn = document.getElementById('downloadMp4Btn');
+    mp4Options = document.getElementById('mp4Options');
+    mp4Quality = document.getElementById('mp4Quality');
+    mp4Codec = document.getElementById('mp4Codec');
+    confirmMp4Btn = document.getElementById('confirmMp4Btn');
+    closeDownloadModal = document.getElementById('closeDownloadModal');
+    
+    // Alert/Confirm modal elements
+    alertModal = document.getElementById('alertModal');
+    alertModalTitle = document.getElementById('alertModalTitle');
+    alertModalMessage = document.getElementById('alertModalMessage');
+    alertModalOk = document.getElementById('alertModalOk');
+    alertModalCancel = document.getElementById('alertModalCancel');
+    
+    elements = {
+        titleCard: document.getElementById('title-card'),
+        dateStamp: document.getElementById('date-stamp'),
+        destinationCard: document.getElementById('destination-card'),
+        motorcycle: document.getElementById('motorcycle'),
+        person: document.getElementById('person'),
+        car: document.getElementById('car'),
+        backpacker: document.getElementById('backpacker')
+    };
+    
+    init();
+});
+
 async function init() {
     await loadRoutes();
     setupEventListeners();
-    updateStatus('Ready - Select a route and click Start Recording');
-    console.log('Map Recorder initialized! 🎬');
+    
+    // Listen for storage changes from editor (cross-tab sync)
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'routes_data') {
+            console.log('Routes updated from editor, reloading...');
+            loadRoutes();
+        }
+    });
+    
+    updateStatus('Ready - Select a route');
 }
 
-// Load available routes from JSON files
+// Load routes - prioritize localStorage (editor data), fallback to JSON files
 async function loadRoutes() {
-    try {
-        routes = [];
-        
-        // First try to load from localStorage (synced from editor)
-        const storedData = localStorage.getItem('routes_data');
-        if (storedData) {
-            try {
-                const data = JSON.parse(storedData);
-                const editorRoutes = data.routes || [];
-                
-                // Add each route from editor
-                editorRoutes.forEach((routeData, index) => {
-                    routes.push({
-                        id: `editor-${index}`,
-                        file: routeData._filename || null,
-                        name: routeData.title || `Route ${index + 1}`,
-                        data: routeData,
-                        source: 'editor'
-                    });
-                });
-                
-                console.log(`Loaded ${routes.length} routes from editor`);
-            } catch (e) {
-                console.warn('Could not parse editor data:', e);
-            }
-        }
-        
-        // If no editor data, load from JSON files directly
-        if (routes.length === 0) {
-            const defaultRoutes = [
-                { id: 'vattlefjall', file: 'vättlefjäll.json' },
-                { id: 'stannum', file: 'stannum-ljungslätt.json' },
-                { id: 'gulf', file: 'gulf-campino.json' },
-                { id: 'destinations', file: 'destinations.json' }
-            ];
+    routes = [];
+    
+    // First, try to load from localStorage (synced from editor)
+    const storedData = localStorage.getItem('routes_data');
+    if (storedData) {
+        try {
+            const data = JSON.parse(storedData);
+            const storedRoutes = data.routes || [];
             
-            for (const route of defaultRoutes) {
-                try {
-                    const response = await fetch(route.file);
-                    if (response.ok) {
-                        const data = await response.json();
-                        routes.push({
-                            id: route.id,
-                            file: route.file,
-                            name: data.title || route.file,
-                            data: data,
-                            source: 'file'
-                        });
-                    }
-                } catch (e) {
-                    console.warn(`Could not load ${route.file}:`, e);
+            if (storedRoutes.length > 0) {
+                for (let i = 0; i < storedRoutes.length; i++) {
+                    const route = storedRoutes[i];
+                    routes.push({
+                        id: `route-${i}`,
+                        file: route._filename || `route-${i}.json`,
+                        name: route.title || `Route ${i + 1}`,
+                        data: route
+                    });
                 }
+                console.log(`Loaded ${routes.length} routes from localStorage`);
+            }
+        } catch (e) {
+            console.warn('Failed to parse localStorage routes:', e);
+        }
+    }
+    
+    // If no routes from localStorage, load from JSON files as fallback
+    if (routes.length === 0) {
+        const routeFiles = [
+            { id: 'vattlefjall', file: 'vättlefjäll.json' },
+            { id: 'stannum', file: 'stannum-ljungslätt.json' },
+            { id: 'gulf', file: 'gulf-campino.json' },
+            { id: 'destinations', file: 'destinations.json' }
+        ];
+        
+        for (const route of routeFiles) {
+            try {
+                const response = await fetch(route.file);
+                if (response.ok) {
+                    const data = await response.json();
+                    routes.push({
+                        id: route.id,
+                        file: route.file,
+                        name: data.title || route.file,
+                        data: data
+                    });
+                }
+            } catch (e) {
+                console.warn(`Could not load ${route.file}`);
             }
         }
-        
-        // Populate dropdown
-        routeSelect.innerHTML = routes.map((route, index) => {
-            const prefix = route.source === 'editor' ? '📝 ' : '📄 ';
-            return `<option value="${index}">${prefix}${route.name}</option>`;
-        }).join('');
-        
-        if (routes.length > 0) {
-            routeSelect.selectedIndex = 0;
-            await selectRoute(0);
-        }
-        
-        sourceFile.textContent = `${routes.length} routes available`;
-        
-    } catch (error) {
-        console.error('Failed to load routes:', error);
-        updateStatus('Error loading routes');
+        console.log(`Loaded ${routes.length} routes from JSON files`);
+    }
+    
+    if (routeSelect) {
+        routeSelect.innerHTML = routes.map((r, i) => `<option value="${i}">${r.name}</option>`).join('');
+        if (routes.length > 0) await selectRoute(0);
     }
 }
 
-// Select and load a route
 async function selectRoute(index) {
     if (index < 0 || index >= routes.length) return;
     
     currentRoute = routes[index];
     currentRouteData = currentRoute.data;
     
-    updateStatus(`Selected: ${currentRoute.name}`);
+    updateStatus(`Loading: ${currentRoute.name}...`);
     
-    // Initialize map preview with this route
-    await initializeMapPreview();
-}
-
-// Initialize the map with current route data
-async function initializeMapPreview() {
-    if (!currentRouteData) return;
-    
-    const mapContainer = document.getElementById('map');
-    
-    // Clear existing map
-    if (map) {
-        map.remove();
-        map = null;
-    }
-    
-    // Process route data to get coordinates
-    const routeSegments = await processRouteData(currentRouteData);
-    if (!routeSegments || routeSegments.length === 0) {
-        updateStatus('Error: No route coordinates found');
-        return;
-    }
-    
-    // Get all coordinates for bounds
-    const allCoords = routeSegments.flatMap(seg => seg.coordinates);
-    const startCoord = allCoords[0];
-    
-    // Create map
-    map = L.map('map', {
-        zoomControl: false,
-        attributionControl: false
-    }).setView(startCoord, 12);
-    
-    // Add tile layer
-    const tileConfig = TILE_LAYERS[currentRouteData.tileLayer] || TILE_LAYERS.osm;
-    L.tileLayer(tileConfig.url, tileConfig.options).addTo(map);
-    
-    // Fit to show entire route
-    const bounds = L.latLngBounds(allCoords);
-    map.fitBounds(bounds, { padding: [50, 50] });
-    
-    // Draw route preview
-    drawRoutePreview(routeSegments);
-    
-    // Store route data for animation
-    window.mapRecorderData = {
-        map,
-        routeSegments,
-        routeData: currentRouteData,
-        allCoords
-    };
-    
-    updateStatus(`Map loaded: ${currentRoute.name}`);
-}
-
-// Draw a preview of the route on the map
-function drawRoutePreview(segments) {
-    if (!map) return;
-    
-    segments.forEach((segment, index) => {
-        if (segment.coordinates && segment.coordinates.length > 1) {
-            // Draw route line
-            L.polyline(segment.coordinates, {
-                color: '#8B4513',
-                weight: 4,
-                opacity: 0.8,
-                dashArray: '10, 10'
-            }).addTo(map);
-            
-            // Add marker at end of segment
-            const lastCoord = segment.coordinates[segment.coordinates.length - 1];
-            if (segment.label) {
-                L.marker(lastCoord)
-                    .bindPopup(segment.label)
-                    .addTo(map);
-            }
-        }
-    });
-    
-    // Add start marker
-    const allCoords = segments.flatMap(seg => seg.coordinates);
-    if (allCoords.length > 0) {
-        L.circleMarker(allCoords[0], {
-            radius: 8,
-            fillColor: '#4CAF50',
-            color: '#fff',
-            weight: 2,
-            fillOpacity: 1
-        }).addTo(map).bindPopup('Start');
+    routeSegments = await processRouteData(currentRouteData);
+    if (routeSegments.length > 0) {
+        await initializeMap();
+        updateStatus(`Loaded: ${currentRoute.name} (${routeSegments.length} segments)`);
+    } else {
+        updateStatus('Error: Could not process route');
     }
 }
 
-// Process route data to extract coordinates
+// Process route data
 async function processRouteData(data) {
     const segments = [];
     
-    // Get start coordinates
     let startCoords = data.start?.coordinates;
     if (!startCoords && data.start?.address) {
         startCoords = await geocodeAddress(data.start.address);
     }
+    if (!startCoords) return [];
     
-    if (!startCoords) {
-        console.error('No start coordinates found');
-        return [];
-    }
+    let prevCoords = startCoords;
+    let prevLabel = data.start?.label || 'START';
     
-    // Process stops
-    const stops = data.stops || [];
-    let previousCoords = startCoords;
-    
-    for (const stop of stops) {
+    for (const stop of (data.stops || [])) {
         let stopCoords = stop.coordinates;
         if (!stopCoords && stop.address) {
             stopCoords = await geocodeAddress(stop.address);
         }
+        if (!stopCoords) continue;
         
-        if (stopCoords) {
-            // If route is provided, use it; otherwise create direct line
-            const coordinates = stop.route || [previousCoords, stopCoords];
-            
-            segments.push({
-                coordinates: coordinates,
-                label: stop.label || '',
-                icon: stop.icon || 'marker',
-                pause: stop.pause || 0
-            });
-            
-            previousCoords = stopCoords;
-        }
-    }
-    
-    // Handle end destination
-    if (data.end) {
-        let endCoords = data.end.coordinates;
-        if (!endCoords && data.end.address) {
-            endCoords = await geocodeAddress(data.end.address);
+        let routeCoords = [prevCoords, stopCoords];
+        const travelMode = stop.travelMode || 'walk';
+        
+        // Determine routing profile based on travel mode
+        let profile = null;
+        if (travelMode === 'hike' || travelMode === 'walk' || travelMode === 'foot') {
+            profile = 'foot';
+        } else if (travelMode === 'driving' || travelMode === 'car') {
+            profile = 'car';
+        } else if (travelMode === 'cycling' || travelMode === 'bike') {
+            profile = 'bike';
         }
         
-        if (endCoords) {
-            segments.push({
-                coordinates: data.end.route || [previousCoords, endCoords],
-                label: data.end.label || 'END',
-                icon: data.end.icon || 'marker',
-                pause: 0
-            });
+        // Fetch actual route if we have a profile
+        if (profile) {
+            const fetched = await getRoute(prevCoords, stopCoords, profile);
+            if (fetched?.length > 2) {
+                routeCoords = fetched;
+                console.log(`Route fetched for ${stop.label}: ${fetched.length} points`);
+            } else {
+                console.warn(`Could not fetch route for ${stop.label}, using straight line`);
+            }
         }
+        
+        segments.push({
+            coordinates: routeCoords,
+            fromLabel: prevLabel,
+            toLabel: stop.label || '',
+            travelMode: travelMode,
+            icon: stop.icon || 'person',
+            zoomLevel: stop.zoomLevel || null,
+            pause: stop.pause ?? 0.5
+        });
+        
+        prevCoords = stopCoords;
+        prevLabel = stop.label || '';
     }
     
     return segments;
 }
 
-// Geocode address to coordinates
 async function geocodeAddress(address) {
     try {
-        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`;
-        const response = await fetch(url, {
-            headers: { 'User-Agent': 'MapAnimationRecorder/1.0' }
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`, {
+            headers: { 'User-Agent': 'MapRecorder/1.0' }
         });
         const data = await response.json();
-        if (data.length > 0) {
-            return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+        if (data.length > 0) return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+    } catch (e) {}
+    return null;
+}
+
+async function getRoute(start, end, profile = 'foot') {
+    const apiKey = import.meta.env.VITE_GRAPHHOPPER_API_KEY || '';
+    if (!apiKey) {
+        console.warn('No GraphHopper API key - using straight line');
+        return null;
+    }
+    
+    try {
+        const url = `https://graphhopper.com/api/1/route?point=${start[0]},${start[1]}&point=${end[0]},${end[1]}&profile=${profile}&points_encoded=false&key=${apiKey}`;
+        console.log(`Fetching route: ${profile} from [${start}] to [${end}]`);
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.message) {
+            console.warn('GraphHopper API error:', data.message);
+            return null;
         }
+        
+        if (data.paths?.[0]?.points?.coordinates) {
+            const coords = data.paths[0].points.coordinates.map(c => [c[1], c[0]]);
+            console.log(`Route received: ${coords.length} points`);
+            return coords;
+        }
+        
+        console.warn('No route path in response:', data);
     } catch (e) {
-        console.error('Geocoding error:', e);
+        console.warn('Route fetch error:', e);
     }
     return null;
 }
 
-// Event Listeners
-function setupEventListeners() {
-    routeSelect.addEventListener('change', async (e) => {
-        await selectRoute(parseInt(e.target.value));
+// Initialize map
+async function initializeMap() {
+    resetAnimationUI();
+    
+    if (map) { map.remove(); map = null; }
+    
+    const allCoords = routeSegments.flatMap(seg => seg.coordinates);
+    const bounds = L.latLngBounds(allCoords);
+    
+    map = L.map('map', {
+        zoomControl: false,
+        attributionControl: false,
+        zoomAnimation: true,
+        fadeAnimation: true
     });
     
-    reloadBtn.addEventListener('click', async () => {
-        reloadBtn.disabled = true;
-        reloadBtn.textContent = '⏳';
-        await loadRoutes();
-        reloadBtn.textContent = '🔄';
-        reloadBtn.disabled = false;
-        updateStatus('Routes reloaded! ✅');
-    });
+    const tileKey = tileSelect?.value || 'osm';
+    const tileConfig = TILE_LAYERS[tileKey] || TILE_LAYERS.osm;
+    L.tileLayer(tileConfig.url, tileConfig.options).addTo(map);
     
-    if (fromEditorBtn) {
-        fromEditorBtn.addEventListener('click', () => {
-            // Find editor route and select it
-            const editorIndex = routes.findIndex(r => r.id === 'editor');
-            if (editorIndex >= 0) {
-                routeSelect.value = editorIndex;
-                selectRoute(editorIndex);
-            } else {
-                updateStatus('No route data from editor. Create one in the Editor tab first.');
-            }
-        });
-    }
+    map.fitBounds(bounds, { padding: [50, 50], animate: false });
     
-    startBtn.addEventListener('click', startRecording);
-    stopBtn.addEventListener('click', stopRecording);
+    window.mapData = {
+        routeSegments,
+        lineColor: currentRouteData.animation?.lineColor || '#8B4513',
+        lineWidth: currentRouteData.animation?.lineWidth || 4,
+        animationDuration: currentRouteData.animation?.duration || 15000,
+        finalDestination: routeSegments[routeSegments.length - 1]?.toLabel || 'DESTINATION',
+        title: currentRouteData.title || 'ADVENTURE',
+        date: currentRouteData.date || '',
+        startZoomLevel: currentRouteData.start?.zoomLevel || 13
+    };
+    
+    window.map = map;
+    window.getMap = () => map;
+    
+    drawRoutePreview();
 }
 
-// Update status message
-function updateStatus(message) {
-    if (statusDiv) {
-        statusDiv.textContent = message;
+function resetAnimationUI() {
+    Object.values(elements).forEach(el => { if (el) el.style.opacity = '0'; });
+}
+
+function drawRoutePreview() {
+    if (!map || !routeSegments.length) return;
+    
+    const allCoords = routeSegments.flatMap(seg => seg.coordinates);
+    L.polyline(allCoords, { color: '#8B4513', weight: 3, opacity: 0.5, dashArray: '10, 10' }).addTo(map);
+    L.circleMarker(allCoords[0], { radius: 8, fillColor: '#8B0000', color: '#3d2817', weight: 2, fillOpacity: 0.8 }).addTo(map);
+    L.circleMarker(allCoords[allCoords.length - 1], { radius: 8, fillColor: '#006400', color: '#3d2817', weight: 2, fillOpacity: 0.8 }).addTo(map);
+}
+
+// Event listeners
+function setupEventListeners() {
+    routeSelect?.addEventListener('change', e => selectRoute(parseInt(e.target.value)));
+    tileSelect?.addEventListener('change', () => initializeMap());
+    reloadBtn?.addEventListener('click', async () => { reloadBtn.disabled = true; await loadRoutes(); reloadBtn.disabled = false; });
+    previewBtn?.addEventListener('click', runPreview);
+    recordBtn?.addEventListener('click', startRecording);
+    downloadBtn?.addEventListener('click', showDownloadDialog);
+    
+    // Download modal event listeners
+    setupDownloadModalListeners();
+}
+
+function setupDownloadModalListeners() {
+    // Close modal
+    closeDownloadModal?.addEventListener('click', hideDownloadDialog);
+    downloadModal?.addEventListener('click', (e) => {
+        if (e.target === downloadModal) hideDownloadDialog();
+    });
+    
+    // WebM download - direct download
+    downloadWebmBtn?.addEventListener('click', () => {
+        downloadWebmBtn.classList.add('selected');
+        downloadMp4Btn.classList.remove('selected');
+        mp4Options.style.display = 'none';
+        hideDownloadDialog();
+        window.location.href = '/api/download';
+    });
+    
+    // MP4 download - show quality options
+    downloadMp4Btn?.addEventListener('click', () => {
+        downloadMp4Btn.classList.add('selected');
+        downloadWebmBtn.classList.remove('selected');
+        mp4Options.style.display = 'block';
+    });
+    
+    // Confirm MP4 conversion
+    confirmMp4Btn?.addEventListener('click', () => {
+        hideDownloadDialog();
+        downloadAsMP4();
+    });
+}
+
+function showDownloadDialog() {
+    // Reset state
+    downloadWebmBtn?.classList.remove('selected');
+    downloadMp4Btn?.classList.remove('selected');
+    if (mp4Options) mp4Options.style.display = 'none';
+    
+    downloadModal?.classList.add('active');
+}
+
+function hideDownloadDialog() {
+    downloadModal?.classList.remove('active');
+}
+
+function updateStatus(msg) {
+    if (statusEl) statusEl.textContent = msg;
+}
+
+// Download as MP4 via FreeConvert
+async function downloadAsMP4() {
+    if (!FREE_CONVERT_API_KEY) {
+        updateStatus('Error: FreeConvert API key not configured');
+        await showAlert('API Key Missing', 'FreeConvert API key not found. Add VITE_FREE_CONVERT_API_KEY to your .env file.');
+        return;
+    }
+    
+    // Get quality settings from dialog
+    const videoCrf = parseInt(mp4Quality?.value || '23');
+    const videoCodec = mp4Codec?.value || 'h264';
+    
+    downloadBtn.disabled = true;
+    showProgress('Converting to MP4...', 'Fetching WebM file');
+    setProgressStage('load');
+    
+    try {
+        // Step 1: Fetch the WebM blob from server
+        updateProgress(5, 'Fetching video...', 'Downloading WebM from server');
+        const webmResponse = await fetch('/api/video-blob');
+        if (!webmResponse.ok) throw new Error('Failed to fetch video');
+        const webmBlob = await webmResponse.blob();
+        
+        updateProgress(10, 'Creating conversion job...', 'Connecting to FreeConvert API');
+        
+        // Step 2: Create FreeConvert job with user-selected options
+        // Using standard ffmpeg-compatible options for maximum compatibility
+        const conversionOptions = {
+            video_codec: 'libx264',
+            audio_codec: 'aac',
+            video_preset: 'medium',
+            video_profile: 'main',
+            video_level: '4.0',
+            pixel_format: 'yuv420p'
+        };
+        
+        // Add quality setting based on user selection
+        if (videoCrf) {
+            conversionOptions.video_crf = videoCrf;
+        }
+        
+        // Override codec if user selected h265
+        if (videoCodec === 'h265') {
+            conversionOptions.video_codec = 'libx265';
+        }
+        
+        const jobResponse = await fetch(`${FREE_CONVERT_API_URL}/process/jobs`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${FREE_CONVERT_API_KEY}`
+            },
+            body: JSON.stringify({
+                tag: 'map-animation',
+                tasks: {
+                    'upload-video': { operation: 'import/upload' },
+                    'convert-to-mp4': {
+                        operation: 'convert',
+                        input: 'upload-video',
+                        input_format: 'webm',
+                        output_format: 'mp4',
+                        options: conversionOptions
+                    },
+                    'export-result': {
+                        operation: 'export/url',
+                        input: 'convert-to-mp4'
+                    }
+                }
+            })
+        });
+        
+        if (!jobResponse.ok) {
+            const errorText = await jobResponse.text();
+            throw new Error(`Failed to create job: ${jobResponse.status} - ${errorText}`);
+        }
+        
+        const job = await jobResponse.json();
+        const uploadTask = job.tasks.find(t => t.operation === 'import/upload');
+        if (!uploadTask?.result?.form) throw new Error('Upload task not found');
+        
+        setProgressStage('encode');
+        updateProgress(20, 'Uploading video...', 'Sending to FreeConvert');
+        
+        // Step 3: Upload WebM
+        const formData = new FormData();
+        Object.entries(uploadTask.result.form.parameters).forEach(([key, value]) => {
+            formData.append(key, value);
+        });
+        formData.append('file', webmBlob, 'video.webm');
+        
+        const uploadResponse = await fetch(uploadTask.result.form.url, {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!uploadResponse.ok) throw new Error(`Upload failed: ${uploadResponse.status}`);
+        
+        updateProgress(40, 'Converting video...', `Processing (${videoCodec.toUpperCase()}, CRF ${videoCrf})`);
+        
+        // Step 4: Poll for completion
+        let downloadUrl = null;
+        let attempts = 0;
+        const maxAttempts = 120; // 2 minutes max
+        
+        while (!downloadUrl && attempts < maxAttempts) {
+            await new Promise(r => setTimeout(r, 1000));
+            attempts++;
+            
+            const statusResponse = await fetch(`${FREE_CONVERT_API_URL}/process/jobs/${job.id}`, {
+                headers: { 'Authorization': `Bearer ${FREE_CONVERT_API_KEY}` }
+            });
+            const jobStatus = await statusResponse.json();
+            
+            if (jobStatus.status === 'completed') {
+                const exportTask = jobStatus.tasks?.find(t => t.operation === 'export/url');
+                downloadUrl = exportTask?.result?.url;
+                break;
+            } else if (jobStatus.status === 'failed') {
+                throw new Error('Conversion failed on FreeConvert');
+            }
+            
+            // Update progress based on job status
+            const percent = Math.min(40 + attempts, 85);
+            updateProgress(percent, 'Converting video...', `Processing... (${attempts}s)`);
+        }
+        
+        if (!downloadUrl) throw new Error('Conversion timeout');
+        
+        setProgressStage('finalize');
+        updateProgress(90, 'Downloading MP4...', 'Fetching converted file');
+        
+        // Step 5: Download MP4
+        const mp4Response = await fetch(downloadUrl);
+        if (!mp4Response.ok) throw new Error('Failed to download MP4');
+        const mp4Blob = await mp4Response.blob();
+        
+        updateProgress(100, 'Complete!', 'Video ready');
+        
+        // Trigger download
+        const url = URL.createObjectURL(mp4Blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `map-animation-${Date.now()}.mp4`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        setTimeout(() => {
+            hideProgress();
+            updateStatus('MP4 downloaded! 🎉');
+            downloadBtn.disabled = false;
+        }, 1000);
+        
+    } catch (err) {
+        console.error('MP4 conversion error:', err);
+        hideProgress();
+        updateStatus('Conversion failed: ' + err.message);
+        downloadBtn.disabled = false;
+        
+        // Offer WebM as fallback
+        const fallback = await showConfirm('Conversion Failed', 'MP4 conversion failed. Download as WebM instead?', 'Download WebM', 'Cancel');
+        if (fallback) {
+            window.location.href = '/api/download';
+        }
+    }
+}
+async function runPreview() {
+    if (isPreviewRunning || !routeSegments.length) return;
+    
+    isPreviewRunning = true;
+    previewBtn.disabled = true;
+    recordBtn.disabled = true;
+    updateStatus('▶️ Running preview...');
+    
+    // Re-init map
+    await initializeMap();
+    await new Promise(r => setTimeout(r, 1000));
+    
+    // Clear preview markers
+    map.eachLayer(layer => {
+        if (layer instanceof L.Polyline || layer instanceof L.Marker || layer instanceof L.CircleMarker) {
+            map.removeLayer(layer);
+        }
+    });
+    
+    // Re-add tiles
+    const tileKey = tileSelect?.value || 'osm';
+    const tileConfig = TILE_LAYERS[tileKey] || TILE_LAYERS.osm;
+    L.tileLayer(tileConfig.url, tileConfig.options).addTo(map);
+    
+    await new Promise(r => setTimeout(r, 500));
+    
+    // Run animation using AnimationCore
+    const { lineColor, lineWidth, animationDuration, finalDestination, title, date, startZoomLevel } = window.mapData;
+    
+    const state = window.AnimationCore.createAnimationState();
+    const config = window.AnimationCore.createAnimationConfig(map, routeSegments, {
+        startZoomLevel, lineColor, lineWidth, title, date, finalDestination
+    });
+    
+    const smoothing = { position: 0.08, zoom: 0.04, animate: true, duration: 1.5 };
+    
+    const TITLE_DURATION = 3000;
+    const PAN_DURATION = 4000;
+    const ROUTE_DURATION = animationDuration;
+    const END_DURATION = 3000;
+    
+    const totalPauseTime = config.segmentPauses.reduce((sum, p) => sum + p * 1000, 0);
+    const phases = [
+        { name: 'title', duration: TITLE_DURATION },
+        { name: 'pan', duration: PAN_DURATION },
+        { name: 'route', duration: ROUTE_DURATION + totalPauseTime },
+        { name: 'end', duration: END_DURATION }
+    ];
+    
+    let startTime = null;
+    let pausedTime = 0;
+    let isPaused = false;
+    let pauseStartTime = 0;
+    let currentPauseDuration = 0;
+    
+    await new Promise(resolve => {
+        function animate(currentTime) {
+            if (!startTime) startTime = currentTime;
+            
+            if (isPaused) {
+                const pauseElapsed = currentTime - pauseStartTime;
+                if (pauseElapsed >= currentPauseDuration) {
+                    isPaused = false;
+                    pausedTime += currentPauseDuration;
+                } else {
+                    requestAnimationFrame(animate);
+                    return;
+                }
+            }
+            
+            const elapsed = currentTime - startTime - pausedTime;
+            let phaseStart = 0, currentPhase = null, phaseProgress = 0;
+            
+            for (const phase of phases) {
+                if (elapsed < phaseStart + phase.duration) {
+                    currentPhase = phase.name;
+                    phaseProgress = (elapsed - phaseStart) / phase.duration;
+                    break;
+                }
+                phaseStart += phase.duration;
+            }
+            
+            if (!currentPhase) { resolve(); return; }
+            
+            const result = window.AnimationCore.renderFrame({
+                phase: currentPhase,
+                phaseProgress: Math.min(1, Math.max(0, phaseProgress)),
+                state, config, map, routeSegments, elements, smoothing
+            });
+            
+            if (result.shouldPause && result.pauseDuration > 0) {
+                isPaused = true;
+                pauseStartTime = currentTime;
+                currentPauseDuration = result.pauseDuration * 1000;
+            }
+            
+            requestAnimationFrame(animate);
+        }
+        requestAnimationFrame(animate);
+    });
+    
+    isPreviewRunning = false;
+    previewBtn.disabled = false;
+    recordBtn.disabled = false;
+    updateStatus('Preview complete');
+}
+
+// Start recording via server API
+async function startRecording() {
+    if (!routeSegments.length) {
+        updateStatus('Please select a route first');
+        return;
+    }
+    
+    recordBtn.disabled = true;
+    previewBtn.disabled = true;
+    downloadBtn.disabled = true;
+    showProgress('Starting recording...', 'Launching Puppeteer', 'record');
+    setProgressStage('load');
+    
+    try {
+        const response = await fetch('/api/record', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                routeSegments,
+                options: {
+                    lineColor: window.mapData.lineColor,
+                    lineWidth: window.mapData.lineWidth,
+                    title: window.mapData.title,
+                    date: window.mapData.date,
+                    finalDestination: window.mapData.finalDestination,
+                    startZoomLevel: window.mapData.startZoomLevel,
+                    animationDuration: window.mapData.animationDuration
+                },
+                tile: tileSelect?.value || 'osm'
+            })
+        });
+        
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Recording failed');
+        }
+        
+        // Poll for status
+        pollInterval = setInterval(pollStatus, 1000);
+        
+    } catch (err) {
+        console.error('Recording error:', err);
+        hideProgress();
+        updateStatus('Error: ' + err.message);
+        recordBtn.disabled = false;
+        previewBtn.disabled = false;
+    }
+}
+
+async function pollStatus() {
+    try {
+        const response = await fetch('/api/status');
+        const { isRecording, progress } = await response.json();
+        
+        if (progress.status === 'recording') {
+            // Update stage based on phase
+            if (progress.phase === 'launching' || progress.phase === 'loading' || progress.phase === 'tiles') {
+                setProgressStage('load');
+            } else if (progress.phase === 'capturing') {
+                setProgressStage('encode');
+            } else if (progress.phase === 'encoding') {
+                setProgressStage('finalize');
+            }
+            
+            const sublabel = progress.frame ? `Frame ${progress.frame}/${progress.totalFrames}` : progress.phase;
+            updateProgress(progress.percent, `${progress.phase}: ${progress.percent}%`, sublabel);
+        } else if (progress.status === 'complete') {
+            clearInterval(pollInterval);
+            setProgressStage('finalize');
+            updateProgress(100, 'Recording complete!', 'WebM ready for download');
+            
+            setTimeout(() => {
+                hideProgress();
+                updateStatus('Recording complete! Click Download 🎉');
+                recordBtn.disabled = false;
+                previewBtn.disabled = false;
+                downloadBtn.disabled = false;
+            }, 1500);
+        } else if (progress.status === 'error') {
+            clearInterval(pollInterval);
+            hideProgress();
+            updateStatus('Error: ' + (progress.error || 'Recording failed'));
+            recordBtn.disabled = false;
+            previewBtn.disabled = false;
+        }
+    } catch (e) {
+        console.error('Poll error:', e);
     }
 }
 
 // Progress UI
-function showProgress() {
+function showProgress(label, sublabel = '', mode = 'convert') {
+    isRecordingMode = (mode === 'record');
+    if (isRecordingMode) {
+        recordingStartTime = Date.now();
+    }
     if (progressContainer) progressContainer.classList.add('active');
+    updateProgress(0, label, sublabel);
+    setProgressStage(null);
 }
 
 function hideProgress() {
     if (progressContainer) progressContainer.classList.remove('active');
+    isRecordingMode = false;
+    recordingStartTime = null;
 }
 
-function updateProgress(percent, label, sublabel) {
-    if (!progressPercent) return;
-    
-    const circumference = 126;
-    const offset = circumference - (percent / 100) * circumference;
-    
-    progressPercent.textContent = `${Math.round(percent)}%`;
-    if (progressSpinnerFill) progressSpinnerFill.style.strokeDashoffset = offset;
+function updateProgress(percent, label, sublabel = '') {
     if (progressBarFill) progressBarFill.style.width = `${percent}%`;
     if (progressLabel) progressLabel.textContent = label;
     if (progressSublabel) progressSublabel.textContent = sublabel;
+    
+    // Show elapsed time during recording, percentage during conversion
+    if (progressPercent) {
+        if (isRecordingMode && recordingStartTime) {
+            const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+            const mins = Math.floor(elapsed / 60);
+            const secs = elapsed % 60;
+            progressPercent.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+        } else {
+            progressPercent.textContent = `${Math.round(percent)}%`;
+        }
+    }
+    
+    // Update circular progress
+    if (progressSpinnerFill) {
+        const circumference = 2 * Math.PI * 20; // r=20
+        const offset = circumference - (percent / 100) * circumference;
+        progressSpinnerFill.style.strokeDashoffset = offset;
+    }
 }
 
 function setProgressStage(stage) {
@@ -394,379 +822,55 @@ function setProgressStage(stage) {
     else if (stage === 'finalize' && stageFinalize) stageFinalize.classList.add('active');
 }
 
-// Setup MediaRecorder with canvas capture
-async function setupMediaRecorder() {
-    // Create recording canvas (1920x1080)
-    recordingCanvas = document.createElement('canvas');
-    recordingCanvas.width = 1920;
-    recordingCanvas.height = 1080;
-    recordingCtx = recordingCanvas.getContext('2d');
-    
-    const selectedQuality = qualitySelect?.value || 'medium';
-    const preset = qualityPresets[selectedQuality] || qualityPresets.medium;
-    
-    // Get canvas stream
-    const stream = recordingCanvas.captureStream(30);
-    
-    // Start frame capture interval
-    const startCapture = () => {
-        captureInterval = setInterval(async () => {
-            if (!isRecording) return;
-            await captureFrame();
-        }, 1000 / 30); // 30 FPS
-    };
-    
-    const stopCapture = () => {
-        if (captureInterval) {
-            clearInterval(captureInterval);
-            captureInterval = null;
-        }
-    };
-    
-    // Start capturing
-    startCapture();
-    
-    // Find supported MIME type
-    const mimeTypes = [
-        'video/webm;codecs=vp9',
-        'video/webm;codecs=vp8',
-        'video/webm'
-    ];
-    
-    let selectedMimeType = '';
-    for (const mime of mimeTypes) {
-        if (MediaRecorder.isTypeSupported(mime)) {
-            selectedMimeType = mime;
-            break;
-        }
-    }
-    
-    if (!selectedMimeType) {
-        alert('Your browser does not support video recording!');
-        stopCapture();
-        return null;
-    }
-    
-    console.log('Using MIME type:', selectedMimeType);
-    console.log('Bitrate:', preset.bitrate);
-    
-    // Create MediaRecorder
-    const recorder = new MediaRecorder(stream, {
-        mimeType: selectedMimeType,
-        videoBitsPerSecond: preset.bitrate
-    });
-    
-    recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-            recordedChunks.push(event.data);
-        }
-    };
-    
-    recorder.onstop = async () => {
-        stopCapture();
-        stream.getTracks().forEach(track => track.stop());
+// Alert/Confirm Modal Functions
+function showAlert(title, message) {
+    return new Promise((resolve) => {
+        alertModalTitle.textContent = title;
+        alertModalMessage.textContent = message;
+        alertModalCancel.style.display = 'none';
+        alertModalOk.textContent = 'OK';
         
-        const webmBlob = new Blob(recordedChunks, { type: selectedMimeType });
-        const routeName = currentRoute?.name?.replace(/[^a-z0-9]/gi, '-') || 'map-animation';
-        const timestamp = Date.now();
-        const selectedFormat = formatSelect?.value || 'mp4';
-        const quality = qualitySelect?.value || 'medium';
+        const handleOk = () => {
+            cleanup();
+            resolve();
+        };
         
-        downloadBtn.disabled = false;
+        const cleanup = () => {
+            alertModal.classList.remove('active');
+            alertModalOk.removeEventListener('click', handleOk);
+        };
         
-        if (selectedFormat === 'mp4' && FREE_CONVERT_API_KEY) {
-            updateStatus('Recording complete! Click download to convert to MP4. ✅');
-            
-            downloadBtn.onclick = async () => {
-                downloadBtn.disabled = true;
-                updateStatus('Converting to MP4... Please wait.');
-                
-                const mp4Blob = await convertToMP4(webmBlob, quality);
-                
-                if (mp4Blob) {
-                    downloadFile(mp4Blob, `${routeName}-${quality}-${timestamp}.mp4`);
-                    updateStatus('Video downloaded as MP4! 💾');
-                } else {
-                    downloadFile(webmBlob, `${routeName}-${quality}-${timestamp}.webm`);
-                    updateStatus('MP4 conversion failed - downloaded as WebM. 💾');
-                }
-                downloadBtn.disabled = false;
-            };
-        } else {
-            updateStatus('Recording complete! Click download to save. ✅');
-            
-            downloadBtn.onclick = () => {
-                downloadFile(webmBlob, `${routeName}-${quality}-${timestamp}.webm`);
-                updateStatus('Video downloaded as WebM! 💾');
-            };
-        }
-    };
-    
-    return { recorder, stopCapture };
-}
-
-// Capture a frame from the map to the recording canvas
-async function captureFrame() {
-    if (!mapWrapper || !recordingCanvas || !recordingCtx) return;
-    
-    try {
-        // Use html2canvas to capture the map wrapper
-        const capturedCanvas = await html2canvas(mapWrapper, {
-            useCORS: true,
-            allowTaint: true,
-            scale: 1,
-            logging: false,
-            width: mapWrapper.offsetWidth,
-            height: mapWrapper.offsetHeight,
-            backgroundColor: '#f5f0e6'
-        });
-        
-        // Draw captured content to recording canvas, scaled to 1920x1080
-        recordingCtx.fillStyle = '#f5f0e6';
-        recordingCtx.fillRect(0, 0, 1920, 1080);
-        
-        // Calculate scaling to fit 1920x1080 while maintaining aspect ratio
-        const scale = Math.min(
-            1920 / capturedCanvas.width,
-            1080 / capturedCanvas.height
-        );
-        const x = (1920 - capturedCanvas.width * scale) / 2;
-        const y = (1080 - capturedCanvas.height * scale) / 2;
-        
-        recordingCtx.drawImage(
-            capturedCanvas,
-            x, y,
-            capturedCanvas.width * scale,
-            capturedCanvas.height * scale
-        );
-        
-    } catch (err) {
-        console.error('Frame capture error:', err);
-    }
-}
-
-// Download file helper
-function downloadFile(blob, filename) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.style.display = 'none';
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-}
-
-// Start recording
-async function startRecording() {
-    if (!currentRouteData) {
-        updateStatus('Please select a route first');
-        return;
-    }
-    
-    if (!map) {
-        await initializeMapPreview();
-    }
-    
-    recordedChunks = [];
-    
-    const recorderObj = await setupMediaRecorder();
-    if (!recorderObj) {
-        updateStatus('Failed to initialize recorder');
-        return;
-    }
-    
-    const { recorder, stopCapture } = recorderObj;
-    mediaRecorder = recorder;
-    mediaRecorder._stopCapture = stopCapture;
-    
-    // Start recording
-    recorder.start(100);
-    isRecording = true;
-    startTime = Date.now();
-    
-    startBtn.disabled = true;
-    stopBtn.disabled = false;
-    downloadBtn.disabled = true;
-    statusDiv.classList.add('recording');
-    updateStatus('🔴 Recording... Move/zoom the map, then click Stop when done.');
-    
-    console.log('Recording started');
-}
-
-// Stop recording
-function stopRecording() {
-    isRecording = false;
-    
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        mediaRecorder.stop();
-        if (mediaRecorder._stopCapture) {
-            mediaRecorder._stopCapture();
-        }
-    }
-    
-    const duration = (Date.now() - startTime) / 1000;
-    
-    startBtn.disabled = false;
-    stopBtn.disabled = true;
-    statusDiv.classList.remove('recording');
-    updateStatus(`Recording stopped. Duration: ${duration.toFixed(2)}s ⏱️`);
-}
-
-// FreeConvert API Integration
-async function connectToJobSocket(jobId) {
-    return new Promise((resolve, reject) => {
-        const socket = io('wss://api.freeconvert.com', {
-            transports: ['websocket'],
-            auth: { token: FREE_CONVERT_API_KEY }
-        });
-        
-        socket.on('connect', () => {
-            console.log('WebSocket connected');
-            socket.emit('subscribe', { job_id: jobId });
-            currentSocket = socket;
-            resolve(socket);
-        });
-        
-        socket.on('connect_error', (error) => {
-            console.error('WebSocket error:', error);
-            reject(error);
-        });
-        
-        setTimeout(() => reject(new Error('WebSocket timeout')), 10000);
+        alertModalOk.addEventListener('click', handleOk);
+        alertModal.classList.add('active');
     });
 }
 
-async function convertToMP4(webmBlob, quality = 'medium') {
-    if (!FREE_CONVERT_API_KEY) {
-        console.error('No FreeConvert API key');
-        return null;
-    }
-    
-    const preset = qualityPresets[quality] || qualityPresets.medium;
-    
-    try {
-        showProgress();
-        setProgressStage('load');
-        updateProgress(5, 'Creating conversion job...', 'Connecting to FreeConvert');
+function showConfirm(title, message, confirmText = 'Confirm', cancelText = 'Cancel') {
+    return new Promise((resolve) => {
+        alertModalTitle.textContent = title;
+        alertModalMessage.textContent = message;
+        alertModalCancel.style.display = 'inline-block';
+        alertModalCancel.textContent = cancelText;
+        alertModalOk.textContent = confirmText;
         
-        // Create job
-        const jobResponse = await fetch(`${FREE_CONVERT_API_URL}/process/jobs`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${FREE_CONVERT_API_KEY}`
-            },
-            body: JSON.stringify({
-                tag: 'map-animation-recorder',
-                tasks: {
-                    'upload-video': { operation: 'import/upload' },
-                    'convert-to-mp4': {
-                        operation: 'convert',
-                        input: 'upload-video',
-                        input_format: 'webm',
-                        output_format: 'mp4',
-                        options: {
-                            video_codec: preset.video_codec,
-                            video_crf: preset.crf
-                        }
-                    },
-                    'export-result': {
-                        operation: 'export/url',
-                        input: 'convert-to-mp4'
-                    }
-                }
-            })
-        });
+        const handleOk = () => {
+            cleanup();
+            resolve(true);
+        };
         
-        if (!jobResponse.ok) {
-            throw new Error(`Job creation failed: ${jobResponse.status}`);
-        }
+        const handleCancel = () => {
+            cleanup();
+            resolve(false);
+        };
         
-        const job = await jobResponse.json();
-        const uploadTask = job.tasks.find(t => t.operation === 'import/upload');
+        const cleanup = () => {
+            alertModal.classList.remove('active');
+            alertModalOk.removeEventListener('click', handleOk);
+            alertModalCancel.removeEventListener('click', handleCancel);
+        };
         
-        if (!uploadTask?.result?.form) {
-            throw new Error('Upload task not found');
-        }
-        
-        updateProgress(15, 'Uploading video...', 'Sending to server');
-        setProgressStage('encode');
-        
-        // Connect websocket for progress
-        let downloadUrl = null;
-        const socket = await connectToJobSocket(job.id);
-        
-        const jobCompletePromise = new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => reject(new Error('Conversion timeout')), 5 * 60 * 1000);
-            
-            socket.on('job_completed', (data) => {
-                clearTimeout(timeout);
-                const exportTask = data.tasks?.find(t => t.operation === 'export/url');
-                downloadUrl = exportTask?.result?.url;
-                resolve(data);
-            });
-            
-            socket.on('job_failed', (data) => {
-                clearTimeout(timeout);
-                reject(new Error('Conversion failed'));
-            });
-            
-            socket.on('task_completed', (data) => {
-                if (data.operation === 'import/upload') {
-                    updateProgress(40, 'Converting...', 'Encoding video');
-                } else if (data.operation === 'convert') {
-                    updateProgress(80, 'Finalizing...', 'Preparing download');
-                    setProgressStage('finalize');
-                }
-            });
-        });
-        
-        // Upload file
-        const formData = new FormData();
-        Object.entries(uploadTask.result.form.parameters).forEach(([key, value]) => {
-            formData.append(key, value);
-        });
-        formData.append('file', webmBlob, 'video.webm');
-        
-        await fetch(uploadTask.result.form.url, {
-            method: 'POST',
-            body: formData
-        });
-        
-        updateProgress(35, 'Converting...', 'Processing on server');
-        
-        // Wait for completion
-        await jobCompletePromise;
-        
-        if (currentSocket) {
-            currentSocket.disconnect();
-            currentSocket = null;
-        }
-        
-        if (!downloadUrl) {
-            throw new Error('No download URL');
-        }
-        
-        updateProgress(95, 'Downloading...', 'Fetching converted file');
-        
-        const mp4Response = await fetch(downloadUrl);
-        const mp4Blob = await mp4Response.blob();
-        
-        updateProgress(100, 'Complete!', 'Video ready');
-        
-        setTimeout(() => hideProgress(), 1000);
-        
-        return mp4Blob;
-        
-    } catch (err) {
-        console.error('Conversion failed:', err);
-        hideProgress();
-        updateStatus('Conversion failed: ' + err.message);
-        return null;
-    }
+        alertModalOk.addEventListener('click', handleOk);
+        alertModalCancel.addEventListener('click', handleCancel);
+        alertModal.classList.add('active');
+    });
 }
-
-// Initialize
-init();

@@ -54,6 +54,12 @@ const confirmModalBody = document.getElementById('confirmModalBody');
 const confirmModalConfirm = document.getElementById('confirmModalConfirm');
 const confirmModalCancel = document.getElementById('confirmModalCancel');
 
+// Alert modal
+const alertModal = document.getElementById('alertModal');
+const alertModalTitle = document.getElementById('alertModalTitle');
+const alertModalBody = document.getElementById('alertModalBody');
+const alertModalOk = document.getElementById('alertModalOk');
+
 // Buttons
 const addStopBtn = document.getElementById('addStopBtn');
 const saveRouteBtn = document.getElementById('saveRouteBtn');
@@ -393,17 +399,18 @@ async function openFile() {
         } catch (err) {
             if (err.name !== 'AbortError') {
                 console.error('Open failed:', err);
-                alert('Failed to open file. Make sure it\'s a valid JSON file.');
+                showAlert('Error', 'Failed to open file. Make sure it\'s a valid JSON file.');
             }
         }
     } else {
-        alert('File System Access API not supported. Use a modern browser like Chrome.');
+        showAlert('Not Supported', 'File System Access API not supported. Use a modern browser like Chrome.');
     }
 }
 
-function createNewFile() {
+async function createNewFile() {
     if (hasUnsavedChanges) {
-        if (!confirm('You have unsaved changes. Create new file anyway?')) return;
+        const proceed = await showConfirm('Unsaved Changes', 'You have unsaved changes. Create new file anyway?');
+        if (!proceed) return;
     }
     
     routes = [];
@@ -453,10 +460,10 @@ async function saveRoute() {
             await writable.close();
             
             markSaved();
-            alert('Route saved successfully! ✅');
+            showAlert('Success', 'Route saved successfully! ✅');
         } catch (err) {
             console.error('Save failed:', err);
-            alert('Failed to save file: ' + err.message);
+            showAlert('Error', 'Failed to save file: ' + err.message);
         }
     } else {
         // No file handle, trigger Save As
@@ -485,15 +492,15 @@ async function saveAsRoute() {
             
             markSaved();
             updateFileDisplay();
-            alert('Route saved successfully! ✅');
+            showAlert('Success', 'Route saved successfully! ✅');
         } catch (err) {
             if (err.name !== 'AbortError') {
                 console.error('Save As failed:', err);
-                alert('Failed to save file: ' + err.message);
+                showAlert('Error', 'Failed to save file: ' + err.message);
             }
         }
     } else {
-        alert('File System Access API not supported. Use a modern browser like Chrome.');
+        showAlert('Not Supported', 'File System Access API not supported. Use a modern browser like Chrome.');
     }
 }
 
@@ -503,10 +510,10 @@ function exportJson() {
     
     const json = JSON.stringify(route, null, 2);
     navigator.clipboard.writeText(json).then(() => {
-        alert('JSON copied to clipboard! 📋');
+        showAlert('Copied!', 'JSON copied to clipboard! 📋');
     }).catch(err => {
         console.error('Copy failed:', err);
-        alert('Failed to copy to clipboard');
+        showAlert('Error', 'Failed to copy to clipboard');
     });
 }
 
@@ -659,6 +666,27 @@ function showConfirm(title, message) {
         confirmModalCancel.addEventListener('click', handleCancel);
         
         confirmModal.classList.add('active');
+    });
+}
+
+// Alert modal
+function showAlert(title, message) {
+    return new Promise((resolve) => {
+        alertModalTitle.textContent = title;
+        alertModalBody.textContent = message;
+        
+        const handleOk = () => {
+            cleanup();
+            resolve();
+        };
+        
+        const cleanup = () => {
+            alertModal.classList.remove('active');
+            alertModalOk.removeEventListener('click', handleOk);
+        };
+        
+        alertModalOk.addEventListener('click', handleOk);
+        alertModal.classList.add('active');
     });
 }
 
