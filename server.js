@@ -106,16 +106,16 @@ async function startServer() {
         }
     });
 
+    // Root route - redirect to recorder
+    app.get('/', (req, res) => {
+        res.redirect('/recorder.html');
+    });
+
     // Use Vite's middleware for transforms (JS, CSS, etc.)
     app.use(vite.middlewares);
     
     // Serve static files (HTML, JSON, images, etc.)
     app.use(express.static(__dirname));
-    
-    // Default route
-    app.get('/', (req, res) => {
-        res.redirect('/recorder.html');
-    });
 
     app.listen(PORT, () => {
         console.log(`\n🗺️  Map Animation Server running at http://localhost:${PORT}`);

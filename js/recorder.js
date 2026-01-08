@@ -431,25 +431,13 @@ async function downloadAsMP4() {
         
         updateProgress(10, 'Creating conversion job...', 'Connecting to FreeConvert API');
         
-        // Step 2: Create FreeConvert job with user-selected options
-        // Using standard ffmpeg-compatible options for maximum compatibility
-        const conversionOptions = {
-            video_codec: 'libx264',
-            audio_codec: 'aac',
-            video_preset: 'medium',
-            video_profile: 'main',
-            video_level: '4.0',
-            pixel_format: 'yuv420p'
-        };
+        // Step 2: Create FreeConvert job with minimal options for QuickTime compatibility
+        // Use simple format - FreeConvert handles codec details automatically
+        const conversionOptions = {};
         
-        // Add quality setting based on user selection
-        if (videoCrf) {
-            conversionOptions.video_crf = videoCrf;
-        }
-        
-        // Override codec if user selected h265
-        if (videoCodec === 'h265') {
-            conversionOptions.video_codec = 'libx265';
+        // Only add CRF quality if not default
+        if (videoCrf && videoCrf !== 23) {
+            conversionOptions.crf = videoCrf;
         }
         
         const jobResponse = await fetch(`${FREE_CONVERT_API_URL}/process/jobs`, {
@@ -467,7 +455,7 @@ async function downloadAsMP4() {
                         input: 'upload-video',
                         input_format: 'webm',
                         output_format: 'mp4',
-                        options: conversionOptions
+                        ...(Object.keys(conversionOptions).length > 0 ? { options: conversionOptions } : {})
                     },
                     'export-result': {
                         operation: 'export/url',
