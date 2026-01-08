@@ -25,7 +25,7 @@
         
         .nav {
             background: white;
-            border-radius: 12px;
+            border-radius: 3px;
             padding: 15px 25px;
             margin-bottom: 20px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
@@ -48,7 +48,7 @@
         
         .nav-link {
             padding: 8px 16px;
-            border-radius: 6px;
+            border-radius: 3px;
             text-decoration: none;
             color: #666;
             font-weight: 500;
@@ -67,7 +67,7 @@
         
         .canvas-wrapper {
             background: white;
-            border-radius: 12px;
+            border-radius: 3px;
             padding: 20px;
             margin-bottom: 20px;
             box-shadow: 0 8px 16px rgba(0,0,0,0.2);
@@ -76,13 +76,13 @@
         #map {
             width: 100%;
             height: 600px;
-            border-radius: 8px;
+            border-radius: 3px;
             position: relative;
         }
         
         .controls {
             background: white;
-            border-radius: 12px;
+            border-radius: 3px;
             padding: 20px;
             margin-bottom: 20px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
@@ -108,7 +108,7 @@
         
         select, .btn {
             padding: 10px 20px;
-            border-radius: 8px;
+            border-radius: 3px;
             font-size: 14px;
             font-weight: 600;
             cursor: pointer;
@@ -158,7 +158,7 @@
         .btn-small {
             padding: 6px 12px;
             font-size: 12px;
-            border-radius: 6px;
+            border-radius: 3px;
         }
         
         button:disabled {
@@ -168,7 +168,7 @@
         
         .status {
             background: white;
-            border-radius: 12px;
+            border-radius: 3px;
             padding: 15px 20px;
             margin-bottom: 20px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
@@ -197,7 +197,7 @@
         .progress-container {
             display: none;
             background: white;
-            border-radius: 12px;
+            border-radius: 3px;
             padding: 30px;
             margin-bottom: 20px;
             box-shadow: 0 8px 16px rgba(0,0,0,0.15);
@@ -316,7 +316,7 @@
             flex: 1;
             text-align: center;
             padding: 15px;
-            border-radius: 8px;
+            border-radius: 3px;
             background: #f8f8f8;
             transition: all 0.3s ease;
         }
@@ -341,7 +341,7 @@
         
         .info {
             background: white;
-            border-radius: 12px;
+            border-radius: 3px;
             padding: 20px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
@@ -369,6 +369,150 @@
             background: #f0f0f0;
             border-radius: 4px;
         }
+        
+        /* Override map-styles for recorder context */
+        .canvas-wrapper {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .canvas-wrapper #map {
+            width: 100%;
+            height: 600px;
+            border-radius: 3px;
+            position: relative;
+        }
+        
+        .canvas-wrapper #parchment-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(139, 90, 43, 0.03) 2px, rgba(139, 90, 43, 0.03) 4px),
+                repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(139, 90, 43, 0.03) 2px, rgba(139, 90, 43, 0.03) 4px);
+            background-color: rgba(244, 232, 208, 0.4);
+            pointer-events: none;
+            z-index: 1000;
+            mix-blend-mode: multiply;
+            border-radius: 3px;
+        }
+        
+        .canvas-wrapper #compass {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 80px;
+            height: 80px;
+            z-index: 1001;
+            opacity: 0.9;
+            filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.4));
+        }
+        
+        .canvas-wrapper #date-stamp {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-family: 'Special Elite', 'Courier New', monospace;
+            font-size: 18px;
+            color: #3d2817;
+            background: rgba(244, 232, 208, 0.9);
+            padding: 10px 15px;
+            border: 2px solid #8B4513;
+            box-shadow: 2px 2px 6px rgba(0,0,0,0.3);
+            z-index: 1001;
+            transform: rotate(-2deg);
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+        
+        .canvas-wrapper #title-card {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Special Elite', 'Courier New', monospace;
+            text-align: center;
+            z-index: 1001;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+        
+        .canvas-wrapper #title-card .title-text {
+            font-size: 48px;
+            color: #3d2817;
+            text-shadow: 3px 3px 0 #f4e8d0, -1px -1px 0 #f4e8d0;
+            margin-bottom: 10px;
+        }
+        
+        .canvas-wrapper #title-card .date-text {
+            font-size: 24px;
+            color: #5a4020;
+        }
+        
+        .canvas-wrapper #destination-card {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(244, 232, 208, 0.95);
+            border: 3px solid #8B4513;
+            padding: 15px 30px;
+            font-family: 'Special Elite', 'Courier New', monospace;
+            font-size: 24px;
+            color: #3d2817;
+            z-index: 1001;
+            opacity: 0;
+            transition: opacity 0.5s;
+            box-shadow: 3px 3px 10px rgba(0,0,0,0.3);
+        }
+        
+        .canvas-wrapper .travel-icon {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            z-index: 1002;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+        
+        .canvas-wrapper #motorcycle {
+            width: 60px;
+            height: 60px;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 60"><ellipse cx="20" cy="45" rx="15" ry="15" fill="%233d2817"/><ellipse cx="80" cy="45" rx="15" ry="15" fill="%233d2817"/><path d="M25 45 Q40 20 60 30 L75 45" stroke="%238B4513" stroke-width="8" fill="none"/><ellipse cx="55" cy="25" rx="12" ry="8" fill="%238B4513"/><circle cx="50" cy="20" r="8" fill="%23f4e8d0"/></svg>');
+        }
+        
+        .canvas-wrapper #person {
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 60"><circle cx="20" cy="10" r="8" fill="%23f4e8d0" stroke="%233d2817" stroke-width="2"/><path d="M20 18 L20 35 M20 25 L10 35 M20 25 L30 35 M20 35 L12 55 M20 35 L28 55" stroke="%233d2817" stroke-width="3" stroke-linecap="round"/></svg>');
+        }
+        
+        .canvas-wrapper #car {
+            width: 60px;
+            height: 60px;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><rect x="10" y="20" width="80" height="25" rx="5" fill="%238B4513"/><rect x="25" y="10" width="50" height="20" rx="5" fill="%238B4513"/><circle cx="25" cy="45" r="8" fill="%233d2817"/><circle cx="75" cy="45" r="8" fill="%233d2817"/><rect x="30" y="15" width="15" height="10" fill="%23a8d4e6"/><rect x="55" y="15" width="15" height="10" fill="%23a8d4e6"/></svg>');
+        }
+        
+        .canvas-wrapper #backpacker {
+            width: 35px;
+            height: 50px;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 70"><circle cx="20" cy="10" r="8" fill="%23f4e8d0" stroke="%233d2817" stroke-width="2"/><rect x="12" y="15" width="16" height="20" rx="3" fill="%238B4513"/><path d="M20 35 L12 60 M20 35 L28 60" stroke="%233d2817" stroke-width="3" stroke-linecap="round"/><line x1="8" y1="20" x2="8" y2="45" stroke="%233d2817" stroke-width="2"/></svg>');
+        }
+        
+        .canvas-wrapper .location-label {
+            font-family: 'Special Elite', 'Courier New', monospace;
+            font-size: 14px;
+            color: #3d2817;
+            background: rgba(244, 232, 208, 0.9);
+            padding: 4px 8px;
+            border: 1px solid #8B4513;
+            white-space: nowrap;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -381,7 +525,7 @@
             </div>
         </nav>
         
-        <div class="canvas-wrapper">
+        <div class="canvas-wrapper" id="mapWrapper">
             <div id="map"></div>
             <div id="parchment-overlay"></div>
             <div id="title-card"></div>
@@ -395,30 +539,19 @@
                     <line x1="100" y1="170" x2="100" y2="188" stroke="#3d2817" stroke-width="3" stroke-linecap="round"/>
                     <line x1="12" y1="100" x2="30" y2="100" stroke="#3d2817" stroke-width="3" stroke-linecap="round"/>
                     <line x1="170" y1="100" x2="188" y2="100" stroke="#3d2817" stroke-width="3" stroke-linecap="round"/>
-                    <line x1="32" y1="32" x2="42" y2="42" stroke="#666" stroke-width="2"/>
-                    <line x1="168" y1="32" x2="158" y2="42" stroke="#666" stroke-width="2"/>
-                    <line x1="32" y1="168" x2="42" y2="158" stroke="#666" stroke-width="2"/>
-                    <line x1="168" y1="168" x2="158" y2="158" stroke="#666" stroke-width="2"/>
-                    <text x="100" y="25" text-anchor="middle" font-size="32" font-family="serif" font-weight="bold" fill="#8B0000" stroke="#f4e8d0" stroke-width="0.5">N</text>
+                    <text x="100" y="25" text-anchor="middle" font-size="32" font-family="serif" font-weight="bold" fill="#8B0000">N</text>
                     <text x="100" y="183" text-anchor="middle" font-size="22" font-family="serif" font-weight="bold" fill="#3d2817">S</text>
                     <text x="178" y="107" text-anchor="middle" font-size="22" font-family="serif" font-weight="bold" fill="#3d2817">E</text>
                     <text x="22" y="107" text-anchor="middle" font-size="22" font-family="serif" font-weight="bold" fill="#3d2817">W</text>
-                    <text x="150" y="55" text-anchor="middle" font-size="14" font-family="serif" fill="#666">NE</text>
-                    <text x="150" y="155" text-anchor="middle" font-size="14" font-family="serif" fill="#666">SE</text>
-                    <text x="50" y="155" text-anchor="middle" font-size="14" font-family="serif" fill="#666">SW</text>
-                    <text x="50" y="55" text-anchor="middle" font-size="14" font-family="serif" fill="#666">NW</text>
-                    <polygon points="100,18 103,35 100,32 97,35" fill="#8B0000" stroke="#3d2817" stroke-width="1"/>
-                    <polygon points="100,182 97,165 100,168 103,165" fill="#d4c5a9" stroke="#3d2817" stroke-width="1"/>
                     <circle cx="100" cy="100" r="12" fill="#3d2817" stroke="#8B4513" stroke-width="2"/>
                     <circle cx="100" cy="100" r="6" fill="#f4e8d0"/>
-                    <circle cx="100" cy="100" r="3" fill="#8B4513"/>
                 </svg>
             </div>
             <div id="date-stamp"></div>
-            <div id="motorcycle" style="display:none;"></div>
-            <div id="person" style="display:none;"></div>
-            <div id="car" style="display:none;"></div>
-            <div id="backpacker" style="display:none;"></div>
+            <div id="motorcycle" class="travel-icon"></div>
+            <div id="person" class="travel-icon"></div>
+            <div id="car" class="travel-icon"></div>
+            <div id="backpacker" class="travel-icon"></div>
         </div>
 
         <div class="controls">
@@ -430,6 +563,19 @@
             </div>
             <button id="reloadBtn" class="btn btn-small" title="Reload routes from editor">🔄</button>
             <span class="source-file" id="sourceFile"></span>
+            
+            <div class="control-group">
+                <label for="tileSelect">Map Style:</label>
+                <select id="tileSelect">
+                    <option value="osm">OpenStreetMap</option>
+                    <option value="watercolor">Watercolor</option>
+                    <option value="terrain">Terrain</option>
+                    <option value="toner">Light (CARTO)</option>
+                    <option value="dark">Dark (CARTO)</option>
+                    <option value="voyager">Voyager (CARTO)</option>
+                    <option value="humanitarian">Humanitarian</option>
+                </select>
+            </div>
             
             <div style="flex: 1"></div>
             
@@ -526,6 +672,9 @@
         </div>
     </div>
 
+    <!-- Load animation modules first (non-module scripts for global access) -->
+    <script src="js/zoom-utils.js"></script>
+    <script src="js/animation-core.js"></script>
     <script type="module" src="js/recorder.js"></script>
 </body>
 </html>
